@@ -45,7 +45,7 @@ ENV LANG=C.UTF-8
 
 # Pinned tool versions — bump these for updates.
 ENV BUILDX_VERSION=v0.31.1 \
-    TRIVY_VERSION=0.69.1 \
+    TRIVY_VERSION=0.69.3 \
     SYFT_VERSION=1.42.1 \
     GRYPE_VERSION=0.109.0 \
     OSV_SCANNER_VERSION=2.3.3
