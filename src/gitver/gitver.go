@@ -5,6 +5,7 @@ package gitver
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -57,16 +58,47 @@ func DetectScopedVersion(rootDir string, scope string) (*VersionInfo, error) {
 		v.Branch = branch
 	}
 
-	// Build tag match pattern
-	var matchPattern string
+	// Build tag match patterns.
+	// git describe supports multiple --match flags (Git 2.13+).
+	// Match both v-prefixed (v1.2.3) and bare semver (17.9.0) tags.
+	// Scoped builds also match scope-prefixed bare versions (component-17.9.0).
+	var matchArgs []string
 	if scope != "" {
-		matchPattern = scope + "-v*"
+		matchArgs = []string{
+			"--match", scope + "-v*",
+			"--match", scope + "-[0-9]*",
+		}
 	} else {
-		matchPattern = "v*"
+		matchArgs = []string{
+			"--match", "v*",
+			"--match", "[0-9]*",
+		}
+	}
+
+	// CI fast path: if the CI system provides an exact tag, trust it.
+	// Avoids shallow-clone weirdness and makes tag pipelines deterministic.
+	if ciTag := os.Getenv("CI_COMMIT_TAG"); ciTag != "" {
+		cand := ciTag
+		if scope != "" {
+			cand = strings.TrimPrefix(cand, scope+"-")
+		}
+		if ver, ok := tryParseSemver(cand); ok {
+			v.Version = ver
+			v.IsRelease = true
+			return v, nil
+		}
 	}
 
 	// Try to get version from git describe (nearest matching tag)
-	desc, err := gitCmd(rootDir, "describe", "--tags", "--abbrev=0", "--match", matchPattern)
+	descArgs := append([]string{"describe", "--tags", "--abbrev=0"}, matchArgs...)
+	desc, err := gitCmd(rootDir, descArgs...)
+	if err != nil {
+		// Shallow clone? Fetch tags and retry once.
+		if shallow, _ := gitCmd(rootDir, "rev-parse", "--is-shallow-repository"); shallow == "true" {
+			gitCmd(rootDir, "fetch", "--tags", "--depth=1")
+			desc, err = gitCmd(rootDir, descArgs...)
+		}
+	}
 	if err != nil {
 		// No matching tags — use dev version
 		v.Version = fmt.Sprintf("0.0.0-dev+%s", v.SHA)
@@ -78,13 +110,47 @@ func DetectScopedVersion(rootDir string, scope string) (*VersionInfo, error) {
 	}
 
 	// Check if HEAD is exactly the tag (clean release)
-	exactTag, exactErr := gitCmd(rootDir, "describe", "--tags", "--exact-match", "--match", matchPattern)
+	exactArgs := append([]string{"describe", "--tags", "--exact-match"}, matchArgs...)
+	exactTag, exactErr := gitCmd(rootDir, exactArgs...)
 	v.IsRelease = exactTag != "" && exactErr == nil
 
 	// Strip scope prefix before parsing semver
 	tag := strings.TrimSpace(desc)
 	if scope != "" {
 		tag = strings.TrimPrefix(tag, scope+"-")
+	}
+
+	// Validate described tag is semver; fall back to tag list if not.
+	// This handles repos with non-version tags that git describe might pick up.
+	if _, ok := tryParseSemver(tag); !ok {
+		listArgs := append([]string{"tag", "--list", "--sort=-v:refname"}, matchArgs...)
+		out, listErr := gitCmd(rootDir, listArgs...)
+		found := false
+		if listErr == nil && out != "" {
+			for _, t := range strings.Split(out, "\n") {
+				t = strings.TrimSpace(t)
+				if t == "" {
+					continue
+				}
+				cand := t
+				if scope != "" {
+					cand = strings.TrimPrefix(cand, scope+"-")
+				}
+				if _, ok2 := tryParseSemver(cand); ok2 {
+					tag = cand
+					found = true
+					break
+				}
+			}
+		}
+		if !found {
+			v.Version = fmt.Sprintf("0.0.0-dev+%s", v.SHA)
+			v.Base = "0.0.0"
+			v.Major = "0"
+			v.Minor = "0"
+			v.Patch = "0"
+			return v, nil
+		}
 	}
 
 	// Parse semver from tag
@@ -115,6 +181,20 @@ func DetectScopedVersion(rootDir string, scope string) (*VersionInfo, error) {
 	}
 
 	return v, nil
+}
+
+// tryParseSemver checks whether s is a valid semver string (with optional v prefix
+// and prerelease suffix). Returns the clean version without v prefix.
+func tryParseSemver(s string) (string, bool) {
+	m := semverRe.FindStringSubmatch(s)
+	if m == nil {
+		return "", false
+	}
+	ver := fmt.Sprintf("%s.%s.%s", m[1], m[2], m[3])
+	if m[4] != "" {
+		ver += "-" + m[4]
+	}
+	return ver, true
 }
 
 // gitCmd runs a git command and returns trimmed stdout.
