@@ -1,11 +1,36 @@
 package config
 
+// ScannersConfig controls which vulnerability scanners are enabled.
+// Both default to true — scanners still require their binary in PATH.
+// Uses *bool so omitting a key preserves the default instead of zeroing it.
+type ScannersConfig struct {
+	Trivy *bool `yaml:"trivy,omitempty"` // run Trivy image scan (default: true)
+	Grype *bool `yaml:"grype,omitempty"` // run Grype image scan (default: true)
+}
+
+// TrivyEnabled returns whether Trivy scanning is enabled (default: true).
+func (s ScannersConfig) TrivyEnabled() bool {
+	if s.Trivy == nil {
+		return true
+	}
+	return *s.Trivy
+}
+
+// GrypeEnabled returns whether Grype scanning is enabled (default: true).
+func (s ScannersConfig) GrypeEnabled() bool {
+	if s.Grype == nil {
+		return true
+	}
+	return *s.Grype
+}
+
 // SecurityConfig holds security scanning configuration.
 type SecurityConfig struct {
-	Enabled        bool   `yaml:"enabled"`          // run vulnerability scanning (default: true)
-	SBOMEnabled    bool   `yaml:"sbom"`             // generate SBOM artifacts (default: true)
-	FailOnCritical bool   `yaml:"fail_on_critical"` // fail the pipeline if critical vulns found
-	OutputDir      string `yaml:"output_dir"`       // directory for scan artifacts (default: .stagefreight/security)
+	Enabled        bool           `yaml:"enabled"`          // run vulnerability scanning (default: true)
+	Scanners       ScannersConfig `yaml:"scanners"`         // per-scanner toggles
+	SBOMEnabled    bool           `yaml:"sbom"`             // generate SBOM artifacts (default: true)
+	FailOnCritical bool           `yaml:"fail_on_critical"` // fail the pipeline if critical vulns found
+	OutputDir      string         `yaml:"output_dir"`       // directory for scan artifacts (default: .stagefreight/security)
 
 	// ReleaseDetail is the default detail level for security info in release notes.
 	// Values: "none", "counts", "detailed", "full" (default: "counts").
@@ -36,8 +61,10 @@ type DetailRule struct {
 
 // DefaultSecurityConfig returns sensible defaults for security scanning.
 func DefaultSecurityConfig() SecurityConfig {
+	t := true
 	return SecurityConfig{
 		Enabled:        true,
+		Scanners:       ScannersConfig{Trivy: &t, Grype: &t},
 		SBOMEnabled:    true,
 		FailOnCritical: false,
 		OutputDir:      ".stagefreight/security",

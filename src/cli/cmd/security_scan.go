@@ -24,9 +24,10 @@ var (
 var securityScanCmd = &cobra.Command{
 	Use:   "scan",
 	Short: "Run vulnerability scan and generate SBOM",
-	Long: `Scan a container image for vulnerabilities using Trivy
-and optionally generate SBOM artifacts using Syft.
+	Long: `Scan a container image for vulnerabilities using Trivy and Grype,
+then deduplicate results and optionally generate SBOM artifacts using Syft.
 
+Individual scanners can be toggled via security.scanners in .stagefreight.yml.
 Results are written to the output directory as JSON, SARIF, and SBOM files.
 A markdown summary is generated at the configured detail level for embedding
 in release notes.`,
@@ -61,6 +62,8 @@ func runSecurityScan(cmd *cobra.Command, args []string) error {
 	// Merge CLI flags with config defaults
 	scanCfg := security.ScanConfig{
 		Enabled:        !secScanSkip,
+		TrivyEnabled:   cfg.Security.Scanners.TrivyEnabled(),
+		GrypeEnabled:   cfg.Security.Scanners.GrypeEnabled(),
 		SBOMEnabled:    secScanSBOM,
 		FailOnCritical: secScanFailCrit || cfg.Security.FailOnCritical,
 		ImageRef:       imageRef,
@@ -80,14 +83,14 @@ func runSecurityScan(cmd *cobra.Command, args []string) error {
 
 	ctx := context.Background()
 
-	// Collapse raw Trivy/Syft output in GitLab CI.
-	output.SectionStartCollapsed(os.Stderr, "sf_trivy_raw", "Trivy / Syft (raw)")
+	// Collapse raw scanner output in GitLab CI.
+	output.SectionStartCollapsed(os.Stderr, "sf_security_raw", "Security scanners (raw)")
 
 	start := time.Now()
 	result, err := security.Scan(ctx, scanCfg)
 	elapsed := time.Since(start)
 
-	output.SectionEnd(os.Stderr, "sf_trivy_raw")
+	output.SectionEnd(os.Stderr, "sf_security_raw")
 
 	if err != nil {
 		return fmt.Errorf("security scan: %w", err)

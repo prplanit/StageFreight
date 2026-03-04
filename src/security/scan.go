@@ -1,6 +1,6 @@
 // Package security provides vulnerability scanning and SBOM generation.
-// Orchestrates external tools (Trivy, Syft) and produces structured results
-// that feed into release notes and forge uploads.
+// Orchestrates external tools (Trivy, Grype, Syft) and produces structured
+// results that feed into release notes and forge uploads.
 package security
 
 import (
@@ -15,6 +15,8 @@ import (
 // ScanConfig holds security scan configuration.
 type ScanConfig struct {
 	Enabled        bool   // run vulnerability scan
+	TrivyEnabled   bool   // run Trivy scanner
+	GrypeEnabled   bool   // run Grype scanner
 	SBOMEnabled    bool   // generate SBOM
 	FailOnCritical bool   // fail if critical vulns found
 	ImageRef       string // image reference or tarball path to scan
@@ -45,7 +47,8 @@ type ScanResult struct {
 	OS              string          // "alpine 3.21.3" (from Trivy JSON Metadata.OS)
 }
 
-// Scan runs a Trivy vulnerability scan and optionally generates SBOMs.
+// Scan runs vulnerability scans (Trivy + Grype when available),
+// deduplicates results, and optionally generates SBOMs.
 func Scan(ctx context.Context, cfg ScanConfig) (*ScanResult, error) {
 	if !cfg.Enabled {
 		return &ScanResult{Status: "skipped"}, nil
@@ -58,41 +61,55 @@ func Scan(ctx context.Context, cfg ScanConfig) (*ScanResult, error) {
 	}
 
 	// Best-effort engine version (silent capture, no stdout/stderr connection).
-	if out, verErr := exec.Command("trivy", "--version").Output(); verErr == nil {
-		for _, ln := range strings.Split(string(out), "\n") {
-			ln = strings.TrimSpace(strings.TrimRight(ln, "\r"))
-			if ln == "" {
-				continue
+	result.EngineVersion = buildEngineVersion()
+
+	// Run Trivy if enabled and available.
+	if cfg.TrivyEnabled {
+		if _, lookErr := exec.LookPath("trivy"); lookErr == nil {
+			// Trivy JSON scan
+			jsonPath := cfg.OutputDir + "/security-scan.json"
+			if err := runTrivy(ctx, cfg.ImageRef, "json", jsonPath); err != nil {
+				return nil, fmt.Errorf("trivy scan: %w", err)
 			}
-			// Find a semver-ish token (N.N.N) in the first non-empty line.
-			for _, tok := range strings.Fields(ln) {
-				t := strings.TrimPrefix(tok, "v")
-				if strings.Count(t, ".") >= 2 && len(t) >= 5 {
-					result.EngineVersion = "Trivy " + t
-					break
-				}
+			result.Artifacts = append(result.Artifacts, jsonPath)
+
+			// Trivy SARIF scan
+			sarifPath := cfg.OutputDir + "/vulnerability-report.sarif"
+			if err := runTrivy(ctx, cfg.ImageRef, "sarif", sarifPath); err != nil {
+				return nil, fmt.Errorf("trivy sarif: %w", err)
 			}
-			break
+			result.Artifacts = append(result.Artifacts, sarifPath)
+
+			// Parse Trivy vulnerabilities
+			if err := parseTrivyVulnerabilities(jsonPath, result); err != nil {
+				return nil, fmt.Errorf("parsing trivy results: %w", err)
+			}
 		}
 	}
 
-	// Run Trivy JSON scan
-	jsonPath := cfg.OutputDir + "/security-scan.json"
-	if err := runTrivy(ctx, cfg.ImageRef, "json", jsonPath); err != nil {
-		return nil, fmt.Errorf("trivy scan: %w", err)
+	// Run Grype if enabled and available.
+	if cfg.GrypeEnabled {
+		if _, lookErr := exec.LookPath("grype"); lookErr == nil {
+			grypeJSON := cfg.OutputDir + "/security-scan-grype.json"
+			if err := runGrype(ctx, cfg.ImageRef, "json", grypeJSON); err != nil {
+				// Non-fatal — log and continue with available results.
+				fmt.Fprintf(os.Stderr, "grype scan failed (continuing without Grype): %v\n", err)
+			} else {
+				result.Artifacts = append(result.Artifacts, grypeJSON)
+				grypeVulns, parseErr := parseGrypeVulnerabilities(grypeJSON)
+				if parseErr != nil {
+					fmt.Fprintf(os.Stderr, "grype parse failed (continuing without Grype): %v\n", parseErr)
+				} else {
+					result.Vulnerabilities = append(result.Vulnerabilities, grypeVulns...)
+				}
+			}
+		}
 	}
-	result.Artifacts = append(result.Artifacts, jsonPath)
 
-	// Run Trivy SARIF scan
-	sarifPath := cfg.OutputDir + "/vulnerability-report.sarif"
-	if err := runTrivy(ctx, cfg.ImageRef, "sarif", sarifPath); err != nil {
-		return nil, fmt.Errorf("trivy sarif: %w", err)
-	}
-	result.Artifacts = append(result.Artifacts, sarifPath)
-
-	// Parse vulnerabilities from JSON (full detail, not just counts)
-	if err := parseVulnerabilities(jsonPath, result); err != nil {
-		return nil, fmt.Errorf("parsing scan results: %w", err)
+	// Deduplicate across scanners and recount.
+	if len(result.Vulnerabilities) > 0 {
+		result.Vulnerabilities = deduplicateVulnerabilities(result.Vulnerabilities)
+		result.Critical, result.High, result.Medium, result.Low = countSeverities(result.Vulnerabilities)
 	}
 
 	// Determine status
@@ -323,7 +340,7 @@ func runSyft(ctx context.Context, imageRef, format, output string) error {
 	return cmd.Run()
 }
 
-func parseVulnerabilities(jsonPath string, result *ScanResult) error {
+func parseTrivyVulnerabilities(jsonPath string, result *ScanResult) error {
 	data, err := os.ReadFile(jsonPath)
 	if err != nil {
 		return err
@@ -398,4 +415,154 @@ func parseVulnerabilities(jsonPath string, result *ScanResult) error {
 		}
 	}
 	return nil
+}
+
+func runGrype(ctx context.Context, imageRef, format, output string) error {
+	args := []string{imageRef, "-o", format, "--file", output}
+	cmd := exec.CommandContext(ctx, "grype", args...)
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	err := cmd.Run()
+	if err != nil {
+		// Grype exits 1 when vulnerabilities are found — output is still valid.
+		if _, statErr := os.Stat(output); statErr == nil {
+			return nil
+		}
+	}
+	return err
+}
+
+func parseGrypeVulnerabilities(jsonPath string) ([]Vulnerability, error) {
+	data, err := os.ReadFile(jsonPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var report struct {
+		Matches []struct {
+			Vulnerability struct {
+				ID          string `json:"id"`
+				Severity    string `json:"severity"`
+				Description string `json:"description"`
+				Fix         struct {
+					Versions []string `json:"versions"`
+					State    string   `json:"state"`
+				} `json:"fix"`
+			} `json:"vulnerability"`
+			Artifact struct {
+				Name    string `json:"name"`
+				Version string `json:"version"`
+			} `json:"artifact"`
+			RelatedVulnerabilities []struct {
+				ID          string `json:"id"`
+				Description string `json:"description"`
+			} `json:"relatedVulnerabilities"`
+		} `json:"matches"`
+	}
+	if err := json.Unmarshal(data, &report); err != nil {
+		return nil, err
+	}
+
+	var vulns []Vulnerability
+	for _, m := range report.Matches {
+		sev := strings.ToUpper(m.Vulnerability.Severity)
+
+		fixedIn := ""
+		if len(m.Vulnerability.Fix.Versions) > 0 {
+			fixedIn = m.Vulnerability.Fix.Versions[0]
+		}
+
+		desc := m.Vulnerability.Description
+		if desc == "" && len(m.RelatedVulnerabilities) > 0 {
+			desc = m.RelatedVulnerabilities[0].Description
+		}
+		if len(desc) > 100 {
+			desc = desc[:97] + "..."
+		}
+
+		vulns = append(vulns, Vulnerability{
+			ID:          m.Vulnerability.ID,
+			Severity:    sev,
+			Package:     m.Artifact.Name,
+			Installed:   m.Artifact.Version,
+			FixedIn:     fixedIn,
+			Description: desc,
+		})
+	}
+	return vulns, nil
+}
+
+// deduplicateVulnerabilities merges findings from multiple scanners.
+// Key: (ID, Package). When duplicated, keeps the entry with more detail.
+func deduplicateVulnerabilities(vulns []Vulnerability) []Vulnerability {
+	type key struct {
+		ID      string
+		Package string
+	}
+	seen := make(map[key]int)
+	var result []Vulnerability
+
+	for _, v := range vulns {
+		k := key{v.ID, v.Package}
+		if idx, ok := seen[k]; ok {
+			existing := result[idx]
+			if v.FixedIn != "" && existing.FixedIn == "" {
+				result[idx].FixedIn = v.FixedIn
+			}
+			if len(v.Description) > len(existing.Description) {
+				result[idx].Description = v.Description
+			}
+			continue
+		}
+		seen[k] = len(result)
+		result = append(result, v)
+	}
+	return result
+}
+
+// countSeverities tallies severity counts from a vulnerability slice.
+func countSeverities(vulns []Vulnerability) (critical, high, medium, low int) {
+	for _, v := range vulns {
+		switch strings.ToUpper(v.Severity) {
+		case "CRITICAL":
+			critical++
+		case "HIGH":
+			high++
+		case "MEDIUM":
+			medium++
+		case "LOW":
+			low++
+		}
+	}
+	return
+}
+
+// buildEngineVersion returns a version string listing available scanners.
+func buildEngineVersion() string {
+	var parts []string
+	if out, err := exec.Command("trivy", "--version").Output(); err == nil {
+		for _, ln := range strings.Split(string(out), "\n") {
+			ln = strings.TrimSpace(strings.TrimRight(ln, "\r"))
+			if ln == "" {
+				continue
+			}
+			for _, tok := range strings.Fields(ln) {
+				t := strings.TrimPrefix(tok, "v")
+				if strings.Count(t, ".") >= 2 && len(t) >= 5 {
+					parts = append(parts, "Trivy "+t)
+					break
+				}
+			}
+			break
+		}
+	}
+	if out, err := exec.Command("grype", "version", "-o", "json").Output(); err == nil {
+		var ver struct {
+			Version string `json:"version"`
+		}
+		if json.Unmarshal(out, &ver) == nil && ver.Version != "" {
+			parts = append(parts, "Grype "+ver.Version)
+		}
+	}
+	return strings.Join(parts, " + ")
 }
