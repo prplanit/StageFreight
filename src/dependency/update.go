@@ -18,6 +18,7 @@ type UpdateResult struct {
 	VerifyLog         string
 	VerifyErr         error
 	Artifacts         []string
+	ArtifactErr       error    // non-nil if artifact generation failed (non-fatal)
 	TouchedModuleDirs []string // repoRoot-relative Go module dirs that were updated
 }
 
@@ -102,11 +103,9 @@ func Update(ctx context.Context, cfg UpdateConfig, deps []freshness.Dependency) 
 		outputDir = filepath.Join(repoRoot, outputDir)
 	}
 
-	artifacts, err := GenerateArtifacts(ctx, repoRoot, outputDir, result, cfg.Bundle)
-	if err != nil {
-		return result, fmt.Errorf("generating artifacts: %w", err)
-	}
+	artifacts, artErr := GenerateArtifacts(ctx, repoRoot, outputDir, result, cfg.Bundle)
 	result.Artifacts = artifacts
+	result.ArtifactErr = artErr
 
 	return result, nil
 }

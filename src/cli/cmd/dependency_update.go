@@ -188,6 +188,9 @@ func runDependencyUpdate(cmd *cobra.Command, args []string) error {
 	updateSec.Separator()
 
 	// Artifacts — print absolute paths for CI clarity
+	if result.ArtifactErr != nil {
+		output.RowStatus(updateSec, "artifacts", result.ArtifactErr.Error(), "warning", color)
+	}
 	for _, a := range result.Artifacts {
 		abs, _ := filepath.Abs(a)
 		updateSec.Row("artifact  %s", abs)
@@ -264,16 +267,15 @@ func runDryRun(ctx context.Context, w *os.File, color bool, cfg dependency.Updat
 
 	sec.Separator()
 
+	if genErr != nil {
+		output.RowStatus(sec, "artifacts", genErr.Error(), "warning", color)
+	}
 	for _, a := range artifacts {
 		abs, _ := filepath.Abs(a)
 		sec.Row("artifact  %s", abs)
 	}
 	sec.Close()
 	output.SectionEnd(w, "sf_deps_dryrun")
-
-	if genErr != nil {
-		return &ExitError{Code: exitUpdateFail, Err: fmt.Errorf("generating artifacts: %w", genErr)}
-	}
 
 	return nil
 }
