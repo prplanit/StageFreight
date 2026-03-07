@@ -127,7 +127,7 @@ func runComponentDocs(cmd *cobra.Command, args []string) error {
 
 		updated, found := registry.ReplaceSection(string(existing), sectionName, docs)
 		if !found {
-			return fmt.Errorf("section markers <!-- sf:%s --> not found in %s", sectionName, target)
+			return fmt.Errorf("section markers <!-- sf:%s:start --> not found in %s", sectionName, target)
 		}
 
 		// Normalize line endings and trailing newline for comparison.

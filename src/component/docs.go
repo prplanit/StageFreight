@@ -111,7 +111,7 @@ func InjectIntoReadme(readmePath, section, content string) (string, error) {
 	original := string(data)
 	updated, found := registry.ReplaceSection(original, section, content)
 	if !found {
-		return "", fmt.Errorf("section %q (markers <!-- sf:%s --> / <!-- /sf:%s -->) not found in %s",
+		return "", fmt.Errorf("section %q (markers <!-- sf:%s:start --> / <!-- sf:%s:end -->) not found in %s",
 			section, section, section, readmePath)
 	}
 	return updated, nil

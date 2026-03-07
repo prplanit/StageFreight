@@ -111,7 +111,7 @@ func runDockerReadme(cmd *cobra.Command, args []string) error {
 
 		// Only docker, github, quay, harbor support description APIs
 		switch provider {
-		case "docker", "github", "quay", "harbor":
+		case "docker", "dockerhub", "github", "quay", "harbor":
 			// supported
 		default:
 			results = append(results, readmeSyncResult{

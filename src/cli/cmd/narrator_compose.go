@@ -81,7 +81,7 @@ func runNarratorCompose(cmd *cobra.Command, args []string) error {
 	// Resolve URL bases from the first narrator file entry (if available).
 	var linkBase, rawBase string
 	if len(cfg.Narrator) > 0 {
-		linkBase = strings.TrimRight(cfg.Narrator[0].LinkBase, "/")
+		linkBase = strings.TrimRight(gitver.ResolveVars(cfg.Narrator[0].LinkBase, cfg.Vars), "/")
 		if linkBase != "" {
 			rawBase = registry.DeriveRawBase(linkBase)
 		}

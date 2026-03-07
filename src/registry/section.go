@@ -7,9 +7,9 @@ import (
 
 // Managed section markers follow the pattern:
 //
-//	<!-- sf:<name> -->
+//	<!-- sf:<name>:start -->
 //	...managed content...
-//	<!-- /sf:<name> -->
+//	<!-- sf:<name>:end -->
 //
 // Any StageFreight module can own a named section. The markers are the contract:
 // everything between them is managed by that module and will be replaced on
@@ -21,12 +21,12 @@ import (
 
 // SectionStart returns the opening marker for a named managed section.
 func SectionStart(name string) string {
-	return "<!-- sf:" + name + " -->"
+	return "<!-- sf:" + name + ":start -->"
 }
 
 // SectionEnd returns the closing marker for a named managed section.
 func SectionEnd(name string) string {
-	return "<!-- /sf:" + name + " -->"
+	return "<!-- sf:" + name + ":end -->"
 }
 
 // WrapSection wraps content in named section markers (block mode with newlines).
