@@ -7,6 +7,7 @@ WORKDIR /src
 COPY go.mod go.sum* ./
 COPY src/ ./src/
 COPY cmd/ ./cmd/
+COPY internal/ ./internal/
 RUN go mod tidy
 
 # Generate banner art from logo.png (produces banner_art_gen.go with escaped ANSI).
