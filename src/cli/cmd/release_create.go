@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -119,84 +120,126 @@ func runReleaseCreate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Build image availability rows from matched registry targets.
-	// Each target is resolved into a ResolvedRegistryTarget, then targets
-	// sharing the same host+path are merged into one row (tags deduped).
-	// Rows are sorted by provider, then by domain.
+	// Build image availability rows.
+	// Truth mode: read from publish manifest (build stage output).
+	// Fallback mode: build from config targets (local dev, manual release).
 	currentTag := os.Getenv("CI_COMMIT_TAG")
-	type imageKey struct{ host, path string }
-	type pendingTarget struct {
-		resolved registry.ResolvedRegistryTarget
-		seen     map[string]bool
-	}
-	targetIndex := make(map[imageKey]*pendingTarget)
-	var targetOrder []imageKey
 
-	for _, t := range collectTargetsByKind(cfg, "registry") {
-		if !targetWhenMatches(t, currentTag) {
-			continue
-		}
-		regProvider := t.Provider
-		if regProvider == "" {
-			regProvider = build.DetectProvider(t.URL)
-		}
-		if p, err := registry.CanonicalProvider(regProvider); err == nil {
-			regProvider = p
-		} else {
-			regProvider = "generic"
-		}
+	manifest, manifestErr := build.ReadPublishManifest(rootDir)
+	var imageRows []release.ImageRow
 
-		resolvedPath := gitver.ResolveVars(t.Path, cfg.Vars)
-		resolvedTags := gitver.ResolveTags(t.Tags, versionInfo)
-
-		host := registry.NormalizeHost(t.URL)
-		k := imageKey{host: host, path: resolvedPath}
-		pt, exists := targetIndex[k]
-		if !exists {
-			pt = &pendingTarget{
-				resolved: registry.ResolvedRegistryTarget{
-					Provider: regProvider,
-					Host:     host,
-					Path:     resolvedPath,
-				},
-				seen: make(map[string]bool),
+	switch {
+	case manifestErr == nil:
+		// Truth mode: build rows from verified publish manifest
+		if len(manifest.Published) > 0 {
+			// Credential resolver for verification
+			credResolver := func(prefix string) (string, string) {
+				if prefix == "" {
+					return "", ""
+				}
+				upper := strings.ToUpper(prefix)
+				return os.Getenv(upper + "_USER"), os.Getenv(upper + "_PASS")
 			}
-			targetIndex[k] = pt
-			targetOrder = append(targetOrder, k)
-		}
-		for _, rt := range resolvedTags {
-			if !pt.seen[rt] {
-				pt.seen[rt] = true
-				pt.resolved.Tags = append(pt.resolved.Tags, rt)
+
+			// Remote verification
+			results, verifyErr := registry.VerifyImages(ctx, manifest.Published, credResolver)
+			if verifyErr != nil {
+				return fmt.Errorf("verifying published images: %w", verifyErr)
 			}
-		}
-	}
+			for _, r := range results {
+				if !r.Verified {
+					return fmt.Errorf("published image %s failed remote verification: %v", r.Image.Ref, r.Err)
+				}
+			}
 
-	// Sort: by provider name, then by domain
-	sort.SliceStable(targetOrder, func(i, j int) bool {
-		ri, rj := targetIndex[targetOrder[i]], targetIndex[targetOrder[j]]
-		if ri.resolved.Provider != rj.resolved.Provider {
-			return ri.resolved.Provider < rj.resolved.Provider
-		}
-		return ri.resolved.Host < rj.resolved.Host
-	})
+			// Artifact discovery (best-effort)
+			artifactMap := registry.DiscoverAllArtifacts(ctx, manifest.Published, credResolver)
 
-	imageRows := make([]release.ImageRow, 0, len(targetOrder))
-	for _, k := range targetOrder {
-		rt := targetIndex[k].resolved
-		tags := make([]release.ResolvedTag, 0, len(rt.Tags))
-		for _, t := range rt.Tags {
-			tags = append(tags, release.ResolvedTag{
-				Name: t,
-				URL:  rt.TagURL(t),
+			// Group by host+path, dedup tags
+			type imageKey struct{ host, path string }
+			type pendingTarget struct {
+				resolved  registry.ResolvedRegistryTarget
+				seen      map[string]bool
+				digestRef string
+				sbom      string
+				prov      string
+				sig       string
+			}
+			targetIndex := make(map[imageKey]*pendingTarget)
+			var targetOrder []imageKey
+
+			for _, img := range manifest.Published {
+				k := imageKey{host: img.Host, path: img.Path}
+				pt, exists := targetIndex[k]
+				if !exists {
+					pt = &pendingTarget{
+						resolved: registry.ResolvedRegistryTarget{
+							Provider: img.Provider,
+							Host:     img.Host,
+							Path:     img.Path,
+						},
+						seen: make(map[string]bool),
+					}
+					targetIndex[k] = pt
+					targetOrder = append(targetOrder, k)
+				}
+				if !pt.seen[img.Tag] {
+					pt.seen[img.Tag] = true
+					pt.resolved.Tags = append(pt.resolved.Tags, img.Tag)
+				}
+				if img.Digest != "" && pt.digestRef == "" {
+					pt.digestRef = img.Host + "/" + img.Path + "@" + img.Digest
+					// Look up artifact links
+					aKey := img.Host + "/" + img.Path + "@" + img.Digest
+					if links, ok := artifactMap[aKey]; ok {
+						pt.sbom = links.SBOM
+						pt.prov = links.Provenance
+						pt.sig = links.Signature
+					}
+				}
+			}
+
+			// Sort by provider, then domain
+			sort.SliceStable(targetOrder, func(i, j int) bool {
+				ri, rj := targetIndex[targetOrder[i]], targetIndex[targetOrder[j]]
+				if ri.resolved.Provider != rj.resolved.Provider {
+					return ri.resolved.Provider < rj.resolved.Provider
+				}
+				return ri.resolved.Host < rj.resolved.Host
 			})
+
+			imageRows = make([]release.ImageRow, 0, len(targetOrder))
+			for _, k := range targetOrder {
+				pt := targetIndex[k]
+				rt := pt.resolved
+				tags := make([]release.ResolvedTag, 0, len(rt.Tags))
+				for _, t := range rt.Tags {
+					tags = append(tags, release.ResolvedTag{
+						Name: t,
+						URL:  rt.TagURL(t),
+					})
+				}
+				imageRows = append(imageRows, release.ImageRow{
+					RegistryLabel: rt.DisplayName(),
+					RegistryURL:   rt.RepoURL(),
+					ImageRef:      rt.ImageRef(),
+					Tags:          tags,
+					DigestRef:     pt.digestRef,
+					SBOM:          pt.sbom,
+					Provenance:    pt.prov,
+					Signature:     pt.sig,
+				})
+			}
 		}
-		imageRows = append(imageRows, release.ImageRow{
-			RegistryLabel: rt.DisplayName(),
-			RegistryURL:   rt.RepoURL(),
-			ImageRef:      rt.ImageRef(),
-			Tags:          tags,
-		})
+		// Empty manifest = no images, no fallback (intentional)
+
+	case errors.Is(manifestErr, build.ErrPublishManifestNotFound):
+		// No truth artifact — fallback to config targets (local dev, manual release)
+		imageRows = buildImageRowsFromConfig(cfg, currentTag, versionInfo)
+
+	default:
+		// Manifest exists but invalid (checksum mismatch, parse error)
+		return fmt.Errorf("publish manifest: %w", manifestErr)
 	}
 
 	// Generate or load release notes
@@ -521,6 +564,85 @@ func runReleaseCreate(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
+}
+
+// buildImageRowsFromConfig builds image rows from config targets (fallback when no publish manifest).
+func buildImageRowsFromConfig(cfg *config.Config, currentTag string, versionInfo *gitver.VersionInfo) []release.ImageRow {
+	type imageKey struct{ host, path string }
+	type pendingTarget struct {
+		resolved registry.ResolvedRegistryTarget
+		seen     map[string]bool
+	}
+	targetIndex := make(map[imageKey]*pendingTarget)
+	var targetOrder []imageKey
+
+	for _, t := range collectTargetsByKind(cfg, "registry") {
+		if !targetWhenMatches(t, currentTag) {
+			continue
+		}
+		regProvider := t.Provider
+		if regProvider == "" {
+			regProvider = build.DetectProvider(t.URL)
+		}
+		if p, err := registry.CanonicalProvider(regProvider); err == nil {
+			regProvider = p
+		} else {
+			regProvider = "generic"
+		}
+
+		resolvedPath := gitver.ResolveVars(t.Path, cfg.Vars)
+		resolvedTags := gitver.ResolveTags(t.Tags, versionInfo)
+
+		host := registry.NormalizeHost(t.URL)
+		k := imageKey{host: host, path: resolvedPath}
+		pt, exists := targetIndex[k]
+		if !exists {
+			pt = &pendingTarget{
+				resolved: registry.ResolvedRegistryTarget{
+					Provider: regProvider,
+					Host:     host,
+					Path:     resolvedPath,
+				},
+				seen: make(map[string]bool),
+			}
+			targetIndex[k] = pt
+			targetOrder = append(targetOrder, k)
+		}
+		for _, rt := range resolvedTags {
+			if !pt.seen[rt] {
+				pt.seen[rt] = true
+				pt.resolved.Tags = append(pt.resolved.Tags, rt)
+			}
+		}
+	}
+
+	sort.SliceStable(targetOrder, func(i, j int) bool {
+		ri, rj := targetIndex[targetOrder[i]], targetIndex[targetOrder[j]]
+		if ri.resolved.Provider != rj.resolved.Provider {
+			return ri.resolved.Provider < rj.resolved.Provider
+		}
+		return ri.resolved.Host < rj.resolved.Host
+	})
+
+	imageRows := make([]release.ImageRow, 0, len(targetOrder))
+	for _, k := range targetOrder {
+		rt := targetIndex[k].resolved
+		tags := make([]release.ResolvedTag, 0, len(rt.Tags))
+		for _, t := range rt.Tags {
+			tags = append(tags, release.ResolvedTag{
+				Name: t,
+				URL:  rt.TagURL(t),
+			})
+		}
+		imageRows = append(imageRows, release.ImageRow{
+			RegistryLabel: rt.DisplayName(),
+			RegistryURL:   rt.RepoURL(),
+			ImageRef:      rt.ImageRef(),
+			Tags:          tags,
+		})
+	}
+
+	return imageRows
 }
 
 // findPrimaryReleaseTarget returns the first release target with no remote forge fields (primary mode).

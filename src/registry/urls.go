@@ -2,6 +2,7 @@ package registry
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -48,6 +49,14 @@ func (r ResolvedRegistryTarget) DisplayName() string {
 		return "Gitea Registry"
 	case "forgejo":
 		return "Forgejo Registry"
+	case "ecr":
+		return "Amazon ECR"
+	case "gar":
+		return "Google Artifact Registry"
+	case "acr":
+		return "Azure Container Registry"
+	case "nexus":
+		return "Sonatype Nexus"
 	case "generic":
 		return r.Host
 	default:
@@ -79,6 +88,26 @@ func (r ResolvedRegistryTarget) RepoURL() string {
 	case "gitea", "forgejo":
 		owner, pkg := splitPath(r.Path)
 		return fmt.Sprintf("https://%s/%s/-/packages/container/%s", r.Host, owner, pkg)
+	case "ecr":
+		account, region, ok := parseECRHost(r.Host)
+		if !ok {
+			return fmt.Sprintf("https://%s/%s", r.Host, r.Path)
+		}
+		return fmt.Sprintf("https://%s.console.aws.amazon.com/ecr/repositories/private/%s/%s", region, account, r.Path)
+	case "gar":
+		region, ok := parseGARHost(r.Host)
+		if !ok {
+			return fmt.Sprintf("https://%s/%s", r.Host, r.Path)
+		}
+		parts := strings.SplitN(r.Path, "/", 3)
+		if len(parts) < 3 {
+			return fmt.Sprintf("https://%s/%s", r.Host, r.Path)
+		}
+		return fmt.Sprintf("https://console.cloud.google.com/artifacts/docker/%s/%s/%s/%s", parts[0], region, parts[1], parts[2])
+	case "acr":
+		return fmt.Sprintf("https://%s/%s", r.Host, r.Path)
+	case "nexus":
+		return fmt.Sprintf("https://%s/#browse/search/docker==%s", r.Host, r.Path)
 	case "generic":
 		return fmt.Sprintf("https://%s/%s", r.Host, r.Path)
 	default:
@@ -111,6 +140,18 @@ func (r ResolvedRegistryTarget) TagURL(tag string) string {
 	case "gitea", "forgejo":
 		owner, pkg := splitPath(r.Path)
 		return fmt.Sprintf("https://%s/%s/-/packages/container/%s", r.Host, owner, pkg)
+	case "ecr":
+		account, region, ok := parseECRHost(r.Host)
+		if !ok {
+			return fmt.Sprintf("https://%s/%s", r.Host, r.Path)
+		}
+		return fmt.Sprintf("https://%s.console.aws.amazon.com/ecr/repositories/private/%s/%s/_/image/%s/details", region, account, r.Path, tag)
+	case "gar":
+		return r.RepoURL() // GAR has no per-tag deep link
+	case "acr":
+		return fmt.Sprintf("https://%s/%s", r.Host, r.Path)
+	case "nexus":
+		return fmt.Sprintf("https://%s/#browse/search/docker==%s", r.Host, r.Path)
 	case "generic":
 		return fmt.Sprintf("https://%s/%s", r.Host, r.Path)
 	default:
@@ -136,4 +177,28 @@ func splitPath(path string) (string, string) {
 		return path[:idx], path[idx+1:]
 	}
 	return path, ""
+}
+
+// ecrHostRe matches ECR hosts: {account}.dkr.ecr.{region}.amazonaws.com
+var ecrHostRe = regexp.MustCompile(`^(\d+)\.dkr\.ecr\.([a-z0-9-]+)\.amazonaws\.com$`)
+
+// parseECRHost extracts account and region from an ECR host.
+func parseECRHost(host string) (account, region string, ok bool) {
+	m := ecrHostRe.FindStringSubmatch(host)
+	if m == nil {
+		return "", "", false
+	}
+	return m[1], m[2], true
+}
+
+// garHostRe matches GAR hosts: {region}-docker.pkg.dev
+var garHostRe = regexp.MustCompile(`^([a-z0-9-]+)-docker\.pkg\.dev$`)
+
+// parseGARHost extracts the region from a GAR host.
+func parseGARHost(host string) (region string, ok bool) {
+	m := garHostRe.FindStringSubmatch(host)
+	if m == nil {
+		return "", false
+	}
+	return m[1], true
 }

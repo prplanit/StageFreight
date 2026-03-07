@@ -1,0 +1,165 @@
+package build
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+	"time"
+)
+
+var ErrPublishManifestNotFound = errors.New("publish manifest not found")
+var ErrPublishManifestInvalid = errors.New("publish manifest invalid")
+
+// PublishedImage records a single image that was successfully pushed.
+type PublishedImage struct {
+	Host          string `json:"host"`                      // normalized registry host
+	Path          string `json:"path"`                      // image path
+	Tag           string `json:"tag"`                       // resolved tag
+	Provider      string `json:"provider"`                  // canonical provider name
+	Ref           string `json:"ref"`                       // full image ref (host/path:tag)
+	Digest        string `json:"digest,omitempty"`          // image digest (immutable truth)
+	CredentialRef string `json:"credential_ref,omitempty"` // non-secret env var prefix for OCI auth resolution
+}
+
+// PublishManifest records all images successfully pushed during a build.
+type PublishManifest struct {
+	Published []PublishedImage `json:"published"`
+	Timestamp string           `json:"timestamp"` // RFC3339
+}
+
+const PublishManifestPath = ".stagefreight/publish.json"
+
+// normalizeHost strips scheme prefixes and trailing slashes from a registry host.
+func normalizeHost(h string) string {
+	h = strings.TrimPrefix(h, "https://")
+	h = strings.TrimPrefix(h, "http://")
+	h = strings.TrimSuffix(h, "/")
+	return strings.ToLower(h)
+}
+
+// WritePublishManifest writes the publish manifest and its SHA-256 checksum sidecar.
+// Canonicalizes Ref, deduplicates by host/path:tag, sorts deterministically,
+// and sets timestamp if empty.
+func WritePublishManifest(dir string, manifest PublishManifest) error {
+	// Canonicalize Ref from components
+	for i := range manifest.Published {
+		img := &manifest.Published[i]
+		img.Host = normalizeHost(img.Host)
+		img.Ref = img.Host + "/" + img.Path + ":" + img.Tag
+	}
+
+	// Dedup by host/path:tag
+	type imageKey struct{ host, path, tag string }
+	seen := make(map[imageKey]int) // key → index in deduped
+	var deduped []PublishedImage
+	for _, img := range manifest.Published {
+		k := imageKey{img.Host, img.Path, img.Tag}
+		if idx, exists := seen[k]; exists {
+			// Same digest = skip, different digest = error
+			if img.Digest != "" && deduped[idx].Digest != "" && img.Digest != deduped[idx].Digest {
+				return fmt.Errorf("conflicting digests for %s: %s vs %s", img.Ref, deduped[idx].Digest, img.Digest)
+			}
+			// Prefer the entry with a digest
+			if img.Digest != "" && deduped[idx].Digest == "" {
+				deduped[idx] = img
+			}
+			continue
+		}
+		seen[k] = len(deduped)
+		deduped = append(deduped, img)
+	}
+
+	// Sort deterministically: host → path → tag
+	sort.Slice(deduped, func(i, j int) bool {
+		if deduped[i].Host != deduped[j].Host {
+			return deduped[i].Host < deduped[j].Host
+		}
+		if deduped[i].Path != deduped[j].Path {
+			return deduped[i].Path < deduped[j].Path
+		}
+		return deduped[i].Tag < deduped[j].Tag
+	})
+
+	manifest.Published = deduped
+
+	// Set timestamp if empty
+	if manifest.Timestamp == "" {
+		manifest.Timestamp = time.Now().UTC().Format(time.RFC3339)
+	}
+
+	// Marshal
+	data, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling publish manifest: %w", err)
+	}
+	data = append(data, '\n')
+
+	// Write manifest
+	manifestPath := filepath.Join(dir, PublishManifestPath)
+	if err := os.MkdirAll(filepath.Dir(manifestPath), 0o755); err != nil {
+		return fmt.Errorf("creating publish manifest dir: %w", err)
+	}
+	if err := os.WriteFile(manifestPath, data, 0o644); err != nil {
+		return fmt.Errorf("writing publish manifest: %w", err)
+	}
+
+	// Write SHA-256 checksum sidecar
+	hash := sha256.Sum256(data)
+	checksumContent := hex.EncodeToString(hash[:]) + "  publish.json\n"
+	checksumPath := manifestPath + ".sha256"
+	if err := os.WriteFile(checksumPath, []byte(checksumContent), 0o644); err != nil {
+		return fmt.Errorf("writing publish manifest checksum: %w", err)
+	}
+
+	return nil
+}
+
+// ReadPublishManifest reads and validates the publish manifest and its checksum.
+func ReadPublishManifest(dir string) (*PublishManifest, error) {
+	manifestPath := filepath.Join(dir, PublishManifestPath)
+
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, ErrPublishManifestNotFound
+		}
+		return nil, fmt.Errorf("%w: reading manifest: %v", ErrPublishManifestInvalid, err)
+	}
+
+	// Read and verify checksum
+	checksumPath := manifestPath + ".sha256"
+	checksumData, err := os.ReadFile(checksumPath)
+	if err != nil {
+		return nil, fmt.Errorf("%w: missing checksum file: %v", ErrPublishManifestInvalid, err)
+	}
+
+	// Parse checksum (format: "<hex>  publish.json\n")
+	checksumStr := strings.TrimSpace(string(checksumData))
+	parts := strings.SplitN(checksumStr, " ", 2)
+	if len(parts) == 0 || parts[0] == "" {
+		return nil, fmt.Errorf("%w: malformed checksum file", ErrPublishManifestInvalid)
+	}
+	expectedHex := parts[0]
+
+	// Compute actual checksum
+	actualHash := sha256.Sum256(data)
+	actualHex := hex.EncodeToString(actualHash[:])
+
+	if actualHex != expectedHex {
+		return nil, fmt.Errorf("%w: checksum mismatch (expected %s, got %s)", ErrPublishManifestInvalid, expectedHex, actualHex)
+	}
+
+	// Parse JSON
+	var manifest PublishManifest
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return nil, fmt.Errorf("%w: parsing manifest: %v", ErrPublishManifestInvalid, err)
+	}
+
+	return &manifest, nil
+}

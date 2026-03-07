@@ -84,6 +84,48 @@ func TestResolvedRegistryTargetURLs(t *testing.T) {
 			"https://registry.example.com/myorg/myimage",
 			"registry.example.com/myorg/myimage",
 		},
+		{
+			"ecr", "ecr", "123456789.dkr.ecr.us-east-1.amazonaws.com", "myapp", "1.0.0",
+			"Amazon ECR",
+			"https://us-east-1.console.aws.amazon.com/ecr/repositories/private/123456789/myapp",
+			"https://us-east-1.console.aws.amazon.com/ecr/repositories/private/123456789/myapp/_/image/1.0.0/details",
+			"123456789.dkr.ecr.us-east-1.amazonaws.com/myapp",
+		},
+		{
+			"gar", "gar", "us-docker.pkg.dev", "my-project/my-repo/my-image", "1.0.0",
+			"Google Artifact Registry",
+			"https://console.cloud.google.com/artifacts/docker/my-project/us/my-repo/my-image",
+			"https://console.cloud.google.com/artifacts/docker/my-project/us/my-repo/my-image",
+			"us-docker.pkg.dev/my-project/my-repo/my-image",
+		},
+		{
+			"gar-subregion", "gar", "europe-west1-docker.pkg.dev", "proj/repo/img", "2.0.0",
+			"Google Artifact Registry",
+			"https://console.cloud.google.com/artifacts/docker/proj/europe-west1/repo/img",
+			"https://console.cloud.google.com/artifacts/docker/proj/europe-west1/repo/img",
+			"europe-west1-docker.pkg.dev/proj/repo/img",
+		},
+		{
+			"acr", "acr", "myregistry.azurecr.io", "myorg/myapp", "1.0.0",
+			"Azure Container Registry",
+			"https://myregistry.azurecr.io/myorg/myapp",
+			"https://myregistry.azurecr.io/myorg/myapp",
+			"myregistry.azurecr.io/myorg/myapp",
+		},
+		{
+			"nexus", "nexus", "nexus.example.com", "docker-hosted/myapp", "1.0.0",
+			"Sonatype Nexus",
+			"https://nexus.example.com/#browse/search/docker==docker-hosted/myapp",
+			"https://nexus.example.com/#browse/search/docker==docker-hosted/myapp",
+			"nexus.example.com/docker-hosted/myapp",
+		},
+		{
+			"ecr-malformed", "ecr", "weird-ecr-host.example.com", "myapp", "1.0.0",
+			"Amazon ECR",
+			"https://weird-ecr-host.example.com/myapp",
+			"https://weird-ecr-host.example.com/myapp",
+			"weird-ecr-host.example.com/myapp",
+		},
 	}
 
 	for _, tc := range cases {

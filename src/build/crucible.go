@@ -51,7 +51,7 @@ func EnsureCrucibleAllowed(rootDir string) error {
 	goMod := filepath.Join(rootDir, "go.mod")
 	data, err := os.ReadFile(goMod)
 	if err != nil {
-		return fmt.Errorf("crucible: cannot read go.mod: %w\n  set %s=1 to override the repo guard", CrucibleAllowEnvVar)
+		return fmt.Errorf("crucible: cannot read go.mod: %w\n  set %s=1 to override the repo guard", err, CrucibleAllowEnvVar)
 	}
 
 	for _, line := range strings.Split(string(data), "\n") {

@@ -279,6 +279,12 @@ func DetectProvider(registryURL string) string {
 		return "jfrog"
 	case strings.Contains(host, "harbor"):
 		return "harbor"
+	case strings.HasSuffix(host, ".amazonaws.com") && strings.Contains(host, ".dkr.ecr."):
+		return "ecr"
+	case strings.HasSuffix(host, ".pkg.dev"):
+		return "gar"
+	case strings.HasSuffix(host, ".azurecr.io"):
+		return "acr"
 	default:
 		return "generic"
 	}

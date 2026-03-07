@@ -271,6 +271,10 @@ func runDockerBuild(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
+	// --- Publish manifest tracking ---
+	var publishManifest build.PublishManifest
+	var publishModeUsed bool
+
 	// --- Execute ---
 	output.SectionStart(w, "sf_build", "Build")
 	buildStart := time.Now()
@@ -330,6 +334,33 @@ func runDockerBuild(cmd *cobra.Command, args []string) error {
 		}
 	}
 	buildElapsed := time.Since(buildStart)
+
+	// Record multi-platform pushes (step.Push = true → buildx --push)
+	for _, step := range plan.Steps {
+		if !step.Push {
+			continue
+		}
+		publishModeUsed = true
+		for _, reg := range step.Registries {
+			if reg.Provider == "local" {
+				continue
+			}
+			host := registry.NormalizeHost(reg.URL)
+			provider := reg.Provider
+			if p, err := registry.CanonicalProvider(provider); err == nil {
+				provider = p
+			}
+			for _, tag := range reg.Tags {
+				publishManifest.Published = append(publishManifest.Published, build.PublishedImage{
+					Host:          host,
+					Path:          reg.Path,
+					Tag:           tag,
+					Provider:      provider,
+					CredentialRef: reg.Credentials,
+				})
+			}
+		}
+	}
 
 	// Build section output
 	buildSec := output.NewSection(w, "Build", buildElapsed, color)
@@ -392,6 +423,40 @@ func runDockerBuild(cmd *cobra.Command, args []string) error {
 		}
 		pushSummary = fmt.Sprintf("%d tag(s) → %d registry", len(remoteTags), len(regSet))
 		output.SectionEnd(w, "sf_push")
+
+		// Record single-platform pushes
+		publishModeUsed = true
+		for _, step := range plan.Steps {
+			if !step.Load || step.Push {
+				continue
+			}
+			for _, reg := range step.Registries {
+				if reg.Provider == "local" {
+					continue
+				}
+				host := registry.NormalizeHost(reg.URL)
+				provider := reg.Provider
+				if p, err := registry.CanonicalProvider(provider); err == nil {
+					provider = p
+				}
+				for _, tag := range reg.Tags {
+					publishManifest.Published = append(publishManifest.Published, build.PublishedImage{
+						Host:          host,
+						Path:          reg.Path,
+						Tag:           tag,
+						Provider:      provider,
+						CredentialRef: reg.Credentials,
+					})
+				}
+			}
+		}
+	}
+
+	// --- Write publish manifest ---
+	if publishModeUsed {
+		if err := build.WritePublishManifest(rootDir, publishManifest); err != nil {
+			return fmt.Errorf("writing publish manifest: %w", err)
+		}
 	}
 
 	// --- Badges ---

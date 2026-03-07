@@ -65,6 +65,10 @@ type ImageRow struct {
 	RegistryURL   string        // provider-derived repo page URL
 	ImageRef      string        // full image ref (e.g., "docker.io/prplanit/stagefreight")
 	Tags          []ResolvedTag // resolved tags with URLs
+	DigestRef     string        // host/path@sha256:... (for pull command)
+	SBOM          string        // pull ref for SBOM artifact
+	Provenance    string        // pull ref for provenance artifact
+	Signature     string        // pull ref for signature artifact
 }
 
 // NotesInput holds all data needed to render release notes.
@@ -353,6 +357,38 @@ func renderNotes(input NotesInput, categories []CommitCategory, allCommits []Com
 			b.WriteString(fmt.Sprintf("| %s | `%s` | %s |\n", regCell, img.ImageRef, strings.Join(tagParts, " ")))
 		}
 		b.WriteString("\n")
+
+		// Digest pull commands and artifact links
+		hasExtras := false
+		for _, img := range input.Images {
+			if img.DigestRef != "" || img.SBOM != "" || img.Provenance != "" || img.Signature != "" {
+				hasExtras = true
+				break
+			}
+		}
+		if hasExtras {
+			b.WriteString("<details>\n<summary>Digest pull commands & supply chain artifacts</summary>\n\n")
+			for _, img := range input.Images {
+				if img.DigestRef == "" && img.SBOM == "" && img.Provenance == "" && img.Signature == "" {
+					continue
+				}
+				b.WriteString(fmt.Sprintf("**%s**\n", img.ImageRef))
+				if img.DigestRef != "" {
+					b.WriteString(fmt.Sprintf("```\ndocker pull %s\n```\n", img.DigestRef))
+				}
+				if img.SBOM != "" {
+					b.WriteString(fmt.Sprintf("- SBOM: `%s`\n", img.SBOM))
+				}
+				if img.Provenance != "" {
+					b.WriteString(fmt.Sprintf("- Provenance: `%s`\n", img.Provenance))
+				}
+				if img.Signature != "" {
+					b.WriteString(fmt.Sprintf("- Signature: `%s`\n", img.Signature))
+				}
+				b.WriteString("\n")
+			}
+			b.WriteString("</details>\n\n")
+		}
 	}
 
 	// 4. Highlights (tag message)
