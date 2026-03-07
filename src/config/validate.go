@@ -49,6 +49,10 @@ func Validate(cfg *Config) (warnings []string, err error) {
 		} else if b.Kind != "docker" {
 			errs = append(errs, fmt.Sprintf("%s: unknown build kind %q (supported: docker)", bpath, b.Kind))
 		}
+
+		if b.BuildMode != "" && b.BuildMode != "crucible" {
+			errs = append(errs, fmt.Sprintf("%s: unknown build_mode %q (supported: crucible)", bpath, b.BuildMode))
+		}
 	}
 
 	// ── Targets ───────────────────────────────────────────────────────────

@@ -32,6 +32,7 @@ var (
 	dbBuildID   string
 	dbSkipLint  bool
 	dbDryRun    bool
+	dbBuildMode string
 )
 
 var dockerBuildCmd = &cobra.Command{
@@ -52,11 +53,16 @@ func init() {
 	dockerBuildCmd.Flags().StringVar(&dbBuildID, "build", "", "build a specific entry by ID (default: all)")
 	dockerBuildCmd.Flags().BoolVar(&dbSkipLint, "skip-lint", false, "skip pre-build lint")
 	dockerBuildCmd.Flags().BoolVar(&dbDryRun, "dry-run", false, "show the plan without executing")
+	dockerBuildCmd.Flags().StringVar(&dbBuildMode, "build-mode", "", "build execution strategy: crucible (self-proving self-build)")
 
 	dockerCmd.AddCommand(dockerBuildCmd)
 }
 
 func runDockerBuild(cmd *cobra.Command, args []string) error {
+	if resolveBuildMode() == "crucible" {
+		return runCrucibleMode(cmd, args)
+	}
+
 	rootDir, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("getting working directory: %w", err)
@@ -229,6 +235,22 @@ func runDockerBuild(cmd *cobra.Command, args []string) error {
 	output.SectionEnd(w, "sf_plan")
 
 	planSummary := fmt.Sprintf("%d build(s), %s, %d tag(s), %s", len(plan.Steps), formatPlatforms(plan.Steps), tagCount, strategy)
+
+	// Inject standard OCI labels into every image. These are global build
+	// infrastructure — plan hash, version, commit, build mode — emitted
+	// regardless of build mode. Crucible verification uses the plan hash
+	// label to compare build graphs via docker inspect.
+	buildMode := "standard"
+	if build.IsCrucibleChild() {
+		buildMode = "crucible-child"
+	}
+	stdLabels := build.StandardLabels(
+		build.NormalizeBuildPlan(plan),
+		version.Version,
+		version.Commit,
+		buildMode,
+	)
+	build.InjectLabels(plan, stdLabels)
 
 	// --- Dry run ---
 	if dbDryRun {
@@ -446,6 +468,434 @@ func runDockerBuild(cmd *cobra.Command, args []string) error {
 	fmt.Fprintln(w)
 
 	return nil
+}
+
+// resolveBuildMode determines the active build mode.
+// Priority: recursion guard → CLI flag → config file → default "".
+func resolveBuildMode() string {
+	// Recursion guard: inner build always runs standard mode
+	if build.IsCrucibleChild() {
+		return ""
+	}
+	// CLI flag takes precedence
+	if dbBuildMode != "" {
+		return dbBuildMode
+	}
+	// Check config for matching build
+	if cfg != nil {
+		for _, b := range cfg.Builds {
+			if b.Kind == "docker" && b.BuildMode != "" {
+				if dbBuildID == "" || b.ID == dbBuildID {
+					return b.BuildMode
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// runCrucibleMode orchestrates the two-pass crucible build.
+func runCrucibleMode(cmd *cobra.Command, args []string) error {
+	rootDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("getting working directory: %w", err)
+	}
+	if len(args) > 0 {
+		rootDir = args[0]
+	}
+	rootDir, err = filepath.Abs(rootDir)
+	if err != nil {
+		return fmt.Errorf("resolving absolute path: %w", err)
+	}
+
+	ctx := context.Background()
+	color := output.UseColor()
+	w := os.Stdout
+	pipelineStart := time.Now()
+
+	// Repo guard
+	if err := build.EnsureCrucibleAllowed(rootDir); err != nil {
+		return err
+	}
+
+	// Generate run ID and temp tags
+	runID := build.GenerateCrucibleRunID()
+	crucibleTag := build.CrucibleTag("candidate", runID)
+	finalTag := build.CrucibleTag("verify", runID)
+
+	// Inject project description
+	if desc := firstDockerReadmeDescription(cfg); desc != "" {
+		gitver.SetProjectDescription(desc)
+	}
+
+	// Banner
+	output.Banner(w, output.NewBannerInfo(version.Version, version.Commit, ""), color)
+
+	// Context block with crucible-specific fields
+	kv := buildContextKV()
+	kv = append(kv,
+		output.KV{Key: "Mode", Value: "crucible"},
+		output.KV{Key: "Self-host", Value: "enabled"},
+		output.KV{Key: "Status", Value: "CALF (self-build verification)"},
+		output.KV{Key: "Passes", Value: "2 (gestation → crucible)"},
+	)
+	output.ContextBlock(w, kv)
+
+	// Crucible Context section
+	crucibleCtx := output.NewSection(w, "Crucible Context", 0, color)
+	crucibleCtx.Row("%-16s%s", "candidate", crucibleTag)
+	crucibleCtx.Row("%-16s%s", "final", finalTag)
+	crucibleCtx.Row("%-16s%s", "canonical", "pass 2 output")
+	crucibleCtx.Row("%-16s%s", "recursion", "guarded")
+	crucibleCtx.Row("%-16s%s", "platform p1", fmt.Sprintf("linux/%s", runtime.GOARCH))
+	crucibleCtx.Row("%-16s%s", "platform p2", "configured build platforms")
+	crucibleCtx.Close()
+
+	// --- Dry run ---
+	if dbDryRun {
+		fmt.Fprintf(w, "\n    crucible dry-run: would build candidate %s, then self-rebuild via pass 2\n\n", crucibleTag)
+		return nil
+	}
+
+	// ═══════════════════════════════════════════════════════════
+	// Pass 1: Gestation
+	// ═══════════════════════════════════════════════════════════
+
+	// Gestation: Detect
+	detectStart := time.Now()
+	engine, err := build.Get("image")
+	if err != nil {
+		return err
+	}
+	det, err := engine.Detect(ctx, rootDir)
+	if err != nil {
+		return fmt.Errorf("detection: %w", err)
+	}
+	detectElapsed := time.Since(detectStart)
+
+	gestDetect := output.NewSection(w, "Gestation: Detect", detectElapsed, color)
+	for _, df := range det.Dockerfiles {
+		gestDetect.Row("%-16s→ %s", "Dockerfile", df.Path)
+	}
+	gestDetect.Row("%-16s→ %s (auto-detected)", "language", det.Language)
+	gestDetect.Close()
+
+	// Gestation: Plan
+	planStart := time.Now()
+
+	planCfg := *cfg
+	builds := make([]config.BuildConfig, len(planCfg.Builds))
+	copy(builds, planCfg.Builds)
+	for i := range builds {
+		if builds[i].Kind != "docker" {
+			continue
+		}
+		if dbBuildID != "" && builds[i].ID != dbBuildID {
+			continue
+		}
+		// Force single platform for pass 1 (--load limitation)
+		builds[i].Platforms = []string{fmt.Sprintf("linux/%s", runtime.GOARCH)}
+		if dbTarget != "" {
+			builds[i].Target = dbTarget
+		}
+	}
+	planCfg.Builds = builds
+
+	plan, err := engine.Plan(ctx, &engines.ImagePlanInput{Cfg: &planCfg, BuildID: dbBuildID}, det)
+	if err != nil {
+		return fmt.Errorf("planning: %w", err)
+	}
+
+	// Override plan for gestation: load only, no push, crucible tag only
+	for i := range plan.Steps {
+		plan.Steps[i].Tags = []string{crucibleTag}
+		plan.Steps[i].Load = true
+		plan.Steps[i].Push = false
+		plan.Steps[i].Registries = nil
+	}
+
+	// Inject standard labels into the gestation image.
+	gestLabels := build.StandardLabels(
+		build.NormalizeBuildPlan(plan),
+		version.Version,
+		version.Commit,
+		"crucible-gestation",
+	)
+	build.InjectLabels(plan, gestLabels)
+	planElapsed := time.Since(planStart)
+
+	gestPlan := output.NewSection(w, "Gestation: Plan", planElapsed, color)
+	gestPlan.Row("%-16s%s", "builds", fmt.Sprintf("%d", len(plan.Steps)))
+	gestPlan.Row("%-16s%s", "platforms", fmt.Sprintf("linux/%s", runtime.GOARCH))
+	gestPlan.Row("%-16s%s", "tags", crucibleTag)
+	gestPlan.Row("%-16s%s", "strategy", "local")
+	gestPlan.Close()
+
+	// Gestation: Build
+	buildStart := time.Now()
+
+	bx := build.NewBuildx(verbose)
+	var stderrBuf bytes.Buffer
+	bx.Stdout = io.Discard
+	if verbose {
+		bx.Stderr = os.Stderr
+	} else {
+		bx.Stderr = &stderrBuf
+	}
+
+	var gestResult build.BuildResult
+	for _, step := range plan.Steps {
+		stepResult, layers, err := bx.BuildWithLayers(ctx, step)
+		if stepResult != nil {
+			stepResult.Layers = layers
+		}
+		gestResult.Steps = append(gestResult.Steps, *stepResult)
+		if err != nil {
+			buildElapsed := time.Since(buildStart)
+			failSec := output.NewSection(w, "Gestation: Build", buildElapsed, color)
+			renderBuildLayers(failSec, gestResult.Steps, color)
+			output.RowStatus(failSec, "status", "build failed", "failed", color)
+			failSec.Close()
+			return fmt.Errorf("gestation build failed: %w", err)
+		}
+	}
+	buildElapsed := time.Since(buildStart)
+
+	gestBuild := output.NewSection(w, "Gestation: Build", buildElapsed, color)
+	renderBuildLayers(gestBuild, gestResult.Steps, color)
+	gestBuild.Separator()
+	gestBuild.Row("result  %s", crucibleTag)
+	gestBuild.Close()
+
+	// Gestation: Summary
+	gestSum := output.NewSection(w, "Gestation: Summary", 0, color)
+	output.SummaryRow(w, "detect", "success",
+		fmt.Sprintf("%d Dockerfile(s), %s", len(det.Dockerfiles), det.Language), color)
+	output.SummaryRow(w, "plan", "success",
+		fmt.Sprintf("%d build(s), local", len(plan.Steps)), color)
+	output.SummaryRow(w, "build", "success", "candidate loaded", color)
+	gestSum.Separator()
+	gestSum.Row("%-16s%s", "Invocation", fmt.Sprintf("self-proving rebuild via %s", crucibleTag))
+	gestSum.Close()
+
+	// ═══════════════════════════════════════════════════════════
+	// Pass 2: Crucible
+	// ═══════════════════════════════════════════════════════════
+
+	pass2Header := output.NewSection(w, "Pass 2: Crucible", 0, color)
+	pass2Header.Close()
+
+	// Collect credential env vars to forward
+	var envVars []string
+	credSeen := make(map[string]bool)
+	for _, t := range cfg.Targets {
+		if t.Credentials == "" || credSeen[t.Credentials] {
+			continue
+		}
+		credSeen[t.Credentials] = true
+		prefix := strings.ToUpper(t.Credentials)
+		for _, suffix := range []string{"_USER", "_PASS", "_TOKEN", "_KEY", "_SECRET"} {
+			key := prefix + suffix
+			if v := os.Getenv(key); v != "" {
+				envVars = append(envVars, key+"="+v)
+			}
+		}
+	}
+	// Forward CI env vars
+	for _, ciVar := range []string{
+		"CI", "CI_PIPELINE_ID", "CI_COMMIT_SHORT_SHA", "CI_COMMIT_SHA",
+		"CI_COMMIT_BRANCH", "CI_COMMIT_TAG", "CI_RUNNER_DESCRIPTION",
+		"GITLAB_CI", "GITHUB_REF_NAME",
+	} {
+		if v := os.Getenv(ciVar); v != "" {
+			envVars = append(envVars, ciVar+"="+v)
+		}
+	}
+
+	// Build forwarded flags: original user flags minus --build-mode
+	var extraFlags []string
+	if dbLocal {
+		extraFlags = append(extraFlags, "--local")
+	}
+	if len(dbPlatforms) > 0 {
+		extraFlags = append(extraFlags, "--platform", strings.Join(dbPlatforms, ","))
+	}
+	for _, t := range dbTags {
+		extraFlags = append(extraFlags, "--tag", t)
+	}
+	if dbTarget != "" {
+		extraFlags = append(extraFlags, "--target", dbTarget)
+	}
+	if dbBuildID != "" {
+		extraFlags = append(extraFlags, "--build", dbBuildID)
+	}
+	if dbSkipLint {
+		extraFlags = append(extraFlags, "--skip-lint")
+	}
+	if verbose {
+		extraFlags = append(extraFlags, "--verbose")
+	}
+	if cfgFile != "" {
+		extraFlags = append(extraFlags, "--config", cfgFile)
+	}
+
+	crucibleResult, crucibleErr := build.RunCrucible(ctx, build.CrucibleOpts{
+		Image:      crucibleTag,
+		FinalTag:   finalTag,
+		RepoDir:    rootDir,
+		ExtraFlags: extraFlags,
+		EnvVars:    envVars,
+		RunID:      runID,
+		Verbose:    verbose,
+	})
+
+	// ═══════════════════════════════════════════════════════════
+	// Crucible Verification
+	// ═══════════════════════════════════════════════════════════
+
+	var verification *build.CrucibleVerification
+	cruciblePassed := crucibleResult != nil && crucibleResult.Passed
+
+	if cruciblePassed {
+		verification, err = build.VerifyCrucible(ctx, crucibleTag, finalTag)
+		if err != nil {
+			// Verification infra failure — still viable
+			verification = &build.CrucibleVerification{TrustLevel: build.TrustViable}
+		}
+		verifySec := output.NewSection(w, "Crucible Verification", 0, color)
+		for _, c := range verification.ArtifactChecks {
+			icon := checkStatusIcon(c.Status, color)
+			verifySec.Row("%-8s/ %-18s %s  %s", "artifact", c.Name, icon, c.Detail)
+		}
+		for _, c := range verification.ExecutionChecks {
+			icon := checkStatusIcon(c.Status, color)
+			verifySec.Row("%-8s/ %-18s %s  %s", "execution", c.Name, icon, c.Detail)
+		}
+		verifySec.Separator()
+		verifySec.Row("%-16s%s", "trust level", build.TrustLevelLabel(verification.TrustLevel))
+		verifySec.Close()
+	}
+
+	// ═══════════════════════════════════════════════════════════
+	// Crucible Summary
+	// ═══════════════════════════════════════════════════════════
+
+	totalElapsed := time.Since(pipelineStart)
+	sumSec := output.NewSection(w, "Crucible Summary", 0, color)
+
+	// Gestation row
+	output.SummaryRow(w, "gestation", "success", "candidate built and loaded", color)
+
+	// Verification row
+	if cruciblePassed && verification != nil {
+		verStatus := "success"
+		if verification.HasHardFailure() {
+			verStatus = "failed"
+		}
+		output.SummaryRow(w, "verification", verStatus, build.TrustLevelLabel(verification.TrustLevel), color)
+	} else {
+		output.SummaryRow(w, "verification", "failed", "pass 2 did not complete", color)
+	}
+
+	// Crucible row with lore
+	if cruciblePassed {
+		output.SummaryRow(w, "crucible", "success",
+			"self-build verified — the calf has forged itself and joins the herd", color)
+	} else {
+		output.SummaryRow(w, "crucible", "failed",
+			"self-build failed — the calf could not forge itself", color)
+	}
+
+	// Provenance
+	trust := "failed"
+	reproducible := false
+	if cruciblePassed && verification != nil {
+		trust = build.TrustLevelLabel(verification.TrustLevel)
+		reproducible = verification.TrustLevel == build.TrustReproducible
+	}
+	provPath := filepath.Join(rootDir, ".stagefreight", "provenance", fmt.Sprintf("crucible-%s.json", runID))
+	stmt := build.ProvenanceStatement{
+		Type:          "https://in-toto.io/Statement/v1",
+		PredicateType: "https://slsa.dev/provenance/v1",
+		Subject: []build.ProvenanceSubject{
+			{Name: finalTag},
+		},
+		Predicate: build.ProvenancePredicate{
+			BuildType: "https://stagefreight.dev/build/crucible/v1",
+			Builder: build.ProvenanceBuilder{
+				ID: "pkg:docker/stagefreight/crucible",
+			},
+			Invocation: build.ProvenanceInvocation{
+				Parameters: map[string]any{
+					"mode":      "crucible",
+					"build_id":  dbBuildID,
+					"target":    dbTarget,
+					"platforms": dbPlatforms,
+					"local":     dbLocal,
+				},
+				Environment: map[string]any{
+					"run_id":    runID,
+					"candidate": crucibleTag,
+					"final":     finalTag,
+				},
+			},
+			Metadata: build.ProvenanceMetadata{
+				BuildStartedOn:  pipelineStart.UTC().Format(time.RFC3339),
+				BuildFinishedOn: time.Now().UTC().Format(time.RFC3339),
+				Completeness: map[string]bool{
+					"parameters":  true,
+					"environment": true,
+					"materials":   false,
+				},
+				Reproducible: reproducible,
+			},
+			StageFreight: map[string]any{
+				"trust_level":  trust,
+				"version":      version.Version,
+				"commit":       version.Commit,
+				"plan_sha256":  build.NormalizeBuildPlan(plan),
+			},
+		},
+	}
+	if provErr := build.WriteProvenance(provPath, stmt); provErr == nil {
+		output.SummaryRow(w, "provenance", "success", provPath, color)
+	} else {
+		output.SummaryRow(w, "provenance", "failed", provErr.Error(), color)
+	}
+
+	// Cleanup
+	cleanupErr := build.CleanupCrucibleImages(ctx, crucibleTag, finalTag)
+	if cleanupErr != nil {
+		output.SummaryRow(w, "cleanup", "failed", cleanupErr.Error(), color)
+	} else {
+		output.SummaryRow(w, "cleanup", "success", "temp images removed", color)
+	}
+
+	sumSec.Separator()
+	overallStatus := "success"
+	if !cruciblePassed {
+		overallStatus = "failed"
+	}
+	output.SummaryTotal(w, totalElapsed, overallStatus, color)
+	sumSec.Close()
+
+	if crucibleErr != nil {
+		return fmt.Errorf("crucible: %w", crucibleErr)
+	}
+
+	return nil
+}
+
+// checkStatusIcon returns the appropriate icon for a verification check status.
+func checkStatusIcon(status string, color bool) string {
+	switch status {
+	case "match":
+		return output.StatusIcon("success", color)
+	case "differs":
+		return output.StatusIcon("failed", color)
+	default:
+		return output.StatusIcon("skipped", color)
+	}
 }
 
 func runPreBuildLint(ctx context.Context, rootDir string, ci bool, color bool, w io.Writer) (string, error) {

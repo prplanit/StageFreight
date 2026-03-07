@@ -150,6 +150,11 @@ func (bx *Buildx) buildArgs(step BuildStep) []string {
 		args = append(args, "--build-arg", fmt.Sprintf("%s=%s", k, v))
 	}
 
+	// Labels
+	for k, v := range step.Labels {
+		args = append(args, "--label", fmt.Sprintf("%s=%s", k, v))
+	}
+
 	// Tags
 	for _, tag := range step.Tags {
 		args = append(args, "--tag", tag)

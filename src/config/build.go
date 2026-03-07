@@ -16,6 +16,10 @@ type BuildConfig struct {
 	// SelectTags enables CLI filtering via --select.
 	SelectTags []string `yaml:"select_tags,omitempty"`
 
+	// BuildMode controls the build execution strategy.
+	// Supported: "" (standard), "crucible" (self-proving rebuild).
+	BuildMode string `yaml:"build_mode,omitempty"`
+
 	// ── kind: docker ──────────────────────────────────────────────────────
 
 	// Dockerfile is the path to the Dockerfile. Default: auto-detect.

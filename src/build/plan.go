@@ -24,6 +24,7 @@ type BuildStep struct {
 	Target     string
 	Platforms  []string
 	BuildArgs  map[string]string
+	Labels     map[string]string // OCI labels injected via --label
 	Tags       []string
 	Output     OutputMode
 	Extract    []ExtractRule    // artifact mode only
