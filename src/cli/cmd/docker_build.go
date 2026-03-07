@@ -1334,12 +1334,17 @@ func runReadmeSyncSection(ctx context.Context, w io.Writer, _ bool, color bool, 
 	var synced, errors int
 
 	for _, t := range targets {
+		// Resolve {var:...} templates in target fields
+		resolvedPath := gitver.ResolveVars(t.Path, cfg.Vars)
+		resolvedDesc := gitver.ResolveVars(t.Description, cfg.Vars)
+		resolvedLinkBase := gitver.ResolveVars(t.LinkBase, cfg.Vars)
+
 		file := t.File
 		if file == "" {
 			file = "README.md"
 		}
 
-		content, err := registry.PrepareReadmeFromFile(file, t.Description, t.LinkBase, rootDir)
+		content, err := registry.PrepareReadmeFromFile(file, resolvedDesc, resolvedLinkBase, rootDir)
 		if err != nil {
 			errors++
 			continue
@@ -1357,11 +1362,11 @@ func runReadmeSyncSection(ctx context.Context, w io.Writer, _ bool, color bool, 
 		}
 
 		short := content.Short
-		if t.Description != "" {
-			short = t.Description
+		if resolvedDesc != "" {
+			short = resolvedDesc
 		}
 
-		if err := client.UpdateDescription(ctx, t.Path, short, content.Full); err != nil {
+		if err := client.UpdateDescription(ctx, resolvedPath, short, content.Full); err != nil {
 			errors++
 			continue
 		}
@@ -1371,7 +1376,8 @@ func runReadmeSyncSection(ctx context.Context, w io.Writer, _ bool, color bool, 
 	elapsed := time.Since(start)
 	sec := output.NewSection(w, "Readme", elapsed, color)
 	for _, t := range targets {
-		sec.Row("%-40ssynced", t.URL+"/"+t.Path)
+		resolvedPath := gitver.ResolveVars(t.Path, cfg.Vars)
+		sec.Row("%-40ssynced", t.URL+"/"+resolvedPath)
 	}
 	sec.Close()
 	output.SectionEnd(w, "sf_readme")

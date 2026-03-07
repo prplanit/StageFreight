@@ -87,7 +87,7 @@ func processNarratorFile(fileCfg config.NarratorFile, rootDir string, vi *gitver
 	}
 
 	// Resolve URL bases from per-file config.
-	linkBase := strings.TrimRight(fileCfg.LinkBase, "/")
+	linkBase := strings.TrimRight(gitver.ResolveVars(fileCfg.LinkBase, cfg.Vars), "/")
 	rawBase := ""
 	if linkBase != "" {
 		rawBase = registry.DeriveRawBase(linkBase)
@@ -205,23 +205,28 @@ func buildModulesV2(items []config.NarratorItem, linkBase, rawBase string, vi *g
 			modules = append(modules, narrator.BreakModule{})
 
 		case "badge":
-			mod := resolveBadgeItemV2(item, linkBase, rawBase)
+			link := gitver.ResolveVars(item.Link, cfg.Vars)
+			resolved := item
+			resolved.Link = link
+			mod := resolveBadgeItemV2(resolved, linkBase, rawBase)
 			if mod != nil {
 				modules = append(modules, mod)
 			}
 
 		case "shield":
+			shieldPath := gitver.ResolveVars(item.Shield, cfg.Vars)
+			link := gitver.ResolveVars(item.Link, cfg.Vars)
 			label := item.Text
 			if label == "" {
-				label = item.Shield
+				label = shieldPath
 			}
 			if vi != nil {
 				label = gitver.ResolveTemplateWithDirAndVars(label, vi, "", cfg.Vars)
 			}
 			modules = append(modules, narrator.ShieldModule{
-				Path:  item.Shield,
+				Path:  shieldPath,
 				Label: label,
-				Link:  resolveLink(item.Link, linkBase),
+				Link:  resolveLink(link, linkBase),
 			})
 
 		case "text":

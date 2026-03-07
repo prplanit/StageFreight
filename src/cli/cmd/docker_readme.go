@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/sofmeright/stagefreight/src/build"
+	"github.com/sofmeright/stagefreight/src/gitver"
 	"github.com/sofmeright/stagefreight/src/output"
 	"github.com/sofmeright/stagefreight/src/registry"
 )
@@ -60,11 +61,15 @@ func runDockerReadme(cmd *cobra.Command, args []string) error {
 	// For dry-run, show content from the first target's file
 	if drDryRun {
 		t := targets[0]
+		// Resolve {var:...} templates in target fields
+		resolvedDesc := gitver.ResolveVars(t.Description, cfg.Vars)
+		resolvedLinkBase := gitver.ResolveVars(t.LinkBase, cfg.Vars)
+
 		file := t.File
 		if file == "" {
 			file = "README.md"
 		}
-		content, err := registry.PrepareReadmeFromFile(file, t.Description, t.LinkBase, rootDir)
+		content, err := registry.PrepareReadmeFromFile(file, resolvedDesc, resolvedLinkBase, rootDir)
 		if err != nil {
 			return err
 		}
@@ -77,15 +82,20 @@ func runDockerReadme(cmd *cobra.Command, args []string) error {
 	var results []readmeSyncResult
 
 	for _, t := range targets {
+		// Resolve {var:...} templates in target fields
+		resolvedPath := gitver.ResolveVars(t.Path, cfg.Vars)
+		resolvedDesc := gitver.ResolveVars(t.Description, cfg.Vars)
+		resolvedLinkBase := gitver.ResolveVars(t.LinkBase, cfg.Vars)
+
 		file := t.File
 		if file == "" {
 			file = "README.md"
 		}
 
-		content, err := registry.PrepareReadmeFromFile(file, t.Description, t.LinkBase, rootDir)
+		content, err := registry.PrepareReadmeFromFile(file, resolvedDesc, resolvedLinkBase, rootDir)
 		if err != nil {
 			results = append(results, readmeSyncResult{
-				Registry: t.URL + "/" + t.Path,
+				Registry: t.URL + "/" + resolvedPath,
 				Status:   "failed",
 				Detail:   err.Error(),
 				Err:      err,
@@ -105,7 +115,7 @@ func runDockerReadme(cmd *cobra.Command, args []string) error {
 			// supported
 		default:
 			results = append(results, readmeSyncResult{
-				Registry: t.URL + "/" + t.Path,
+				Registry: t.URL + "/" + resolvedPath,
 				Status:   "skipped",
 				Detail:   "no description API",
 			})
@@ -115,7 +125,7 @@ func runDockerReadme(cmd *cobra.Command, args []string) error {
 		client, err := registry.NewRegistry(provider, t.URL, t.Credentials)
 		if err != nil {
 			results = append(results, readmeSyncResult{
-				Registry: t.URL + "/" + t.Path,
+				Registry: t.URL + "/" + resolvedPath,
 				Status:   "failed",
 				Detail:   err.Error(),
 				Err:      err,
@@ -125,30 +135,30 @@ func runDockerReadme(cmd *cobra.Command, args []string) error {
 
 		// Per-target description override
 		short := content.Short
-		if t.Description != "" {
-			short = t.Description
+		if resolvedDesc != "" {
+			short = resolvedDesc
 		}
 
-		err = client.UpdateDescription(ctx, t.Path, short, content.Full)
+		err = client.UpdateDescription(ctx, resolvedPath, short, content.Full)
 
 		// Surface credential warnings (populated during auth)
 		if warner, ok := client.(registry.Warner); ok {
 			for _, warn := range warner.Warnings() {
-				fmt.Fprintf(os.Stderr, "warning: %s/%s: %s\n", t.URL, t.Path, warn)
+				fmt.Fprintf(os.Stderr, "warning: %s/%s: %s\n", t.URL, resolvedPath, warn)
 			}
 		}
 
 		if err != nil {
 			if registry.IsForbidden(err) {
 				results = append(results, readmeSyncResult{
-					Registry: t.URL + "/" + t.Path,
+					Registry: t.URL + "/" + resolvedPath,
 					Status:   "skipped",
 					Detail:   "forbidden (ensure PAT has read/write/delete scope)",
 				})
 				continue
 			}
 			results = append(results, readmeSyncResult{
-				Registry: t.URL + "/" + t.Path,
+				Registry: t.URL + "/" + resolvedPath,
 				Status:   "failed",
 				Detail:   err.Error(),
 				Err:      err,
@@ -157,7 +167,7 @@ func runDockerReadme(cmd *cobra.Command, args []string) error {
 		}
 
 		results = append(results, readmeSyncResult{
-			Registry: t.URL + "/" + t.Path,
+			Registry: t.URL + "/" + resolvedPath,
 			Status:   "success",
 		})
 	}
