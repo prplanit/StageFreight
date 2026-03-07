@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/sofmeright/stagefreight/src/build"
@@ -12,6 +13,7 @@ import (
 	"github.com/sofmeright/stagefreight/src/config"
 	"github.com/sofmeright/stagefreight/src/gitver"
 	"github.com/sofmeright/stagefreight/src/narrator"
+	"github.com/sofmeright/stagefreight/src/output"
 	"github.com/sofmeright/stagefreight/src/registry"
 )
 
@@ -39,6 +41,13 @@ func init() {
 	narratorCmd.AddCommand(narratorRunCmd)
 }
 
+// narratorFileResult tracks the outcome for a single narrator file.
+type narratorFileResult struct {
+	File   string
+	Status string // "success" | "skipped"
+	Detail string // "updated" | "would update" | "unchanged"
+}
+
 func runNarratorRun(cmd *cobra.Command, args []string) error {
 	if len(cfg.Narrator) == 0 {
 		return fmt.Errorf("no narrator files configured")
@@ -56,11 +65,43 @@ func runNarratorRun(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "  warning: version detection failed: %v\n", err)
 	}
 
+	start := time.Now()
+	color := output.UseColor()
+	w := os.Stdout
+
+	var results []narratorFileResult
 	for _, fileCfg := range cfg.Narrator {
-		if err := processNarratorFile(fileCfg, rootDir, versionInfo); err != nil {
+		result, content, err := processNarratorFile(fileCfg, rootDir, versionInfo)
+		if err != nil {
 			return err
 		}
+		if nrDryRun && content != "" {
+			fmt.Fprintln(w, content)
+		}
+		results = append(results, result)
 	}
+
+	elapsed := time.Since(start)
+	sec := output.NewSection(w, "Narrator Run", elapsed, color)
+
+	var changed, unchanged int
+	for _, r := range results {
+		output.RowStatus(sec, r.File, r.Detail, r.Status, color)
+		switch r.Detail {
+		case "updated", "would update":
+			changed++
+		default:
+			unchanged++
+		}
+	}
+
+	sec.Separator()
+	if nrDryRun {
+		sec.Row("%d would update, %d unchanged", changed, unchanged)
+	} else {
+		sec.Row("%d updated, %d unchanged", changed, unchanged)
+	}
+	sec.Close()
 
 	return nil
 }
@@ -80,7 +121,7 @@ type placementGroup struct {
 	Items []config.NarratorItem
 }
 
-func processNarratorFile(fileCfg config.NarratorFile, rootDir string, vi *gitver.VersionInfo) error {
+func processNarratorFile(fileCfg config.NarratorFile, rootDir string, vi *gitver.VersionInfo) (narratorFileResult, string, error) {
 	path := fileCfg.File
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(rootDir, path)
@@ -99,7 +140,7 @@ func processNarratorFile(fileCfg config.NarratorFile, rootDir string, vi *gitver
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			return fmt.Errorf("narrator: reading %s: %w", fileCfg.File, err)
+			return narratorFileResult{}, "", fmt.Errorf("narrator: reading %s: %w", fileCfg.File, err)
 		}
 		// File doesn't exist yet — start fresh.
 	} else {
@@ -143,27 +184,22 @@ func processNarratorFile(fileCfg config.NarratorFile, rootDir string, vi *gitver
 
 	if nrDryRun {
 		if content != original {
-			fmt.Printf("  narrator %s (changed)\n", fileCfg.File)
-			fmt.Println(content)
-		} else {
-			fmt.Printf("  narrator %s (unchanged)\n", fileCfg.File)
+			return narratorFileResult{File: fileCfg.File, Status: "success", Detail: "would update"}, content, nil
 		}
-		return nil
+		return narratorFileResult{File: fileCfg.File, Status: "skipped", Detail: "unchanged"}, "", nil
 	}
 
 	if content == original {
-		fmt.Printf("  narrator %s (unchanged)\n", fileCfg.File)
-		return nil
+		return narratorFileResult{File: fileCfg.File, Status: "skipped", Detail: "unchanged"}, "", nil
 	}
 
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("narrator: creating directory for %s: %w", fileCfg.File, err)
+		return narratorFileResult{}, "", fmt.Errorf("narrator: creating directory for %s: %w", fileCfg.File, err)
 	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		return fmt.Errorf("narrator: writing %s: %w", fileCfg.File, err)
+		return narratorFileResult{}, "", fmt.Errorf("narrator: writing %s: %w", fileCfg.File, err)
 	}
-	fmt.Printf("  narrator %s (updated)\n", fileCfg.File)
-	return nil
+	return narratorFileResult{File: fileCfg.File, Status: "success", Detail: "updated"}, "", nil
 }
 
 // groupItemsByPlacement groups items by their placement key, preserving declaration order.
