@@ -675,11 +675,15 @@ func runCrucibleMode(cmd *cobra.Command, args []string) error {
 	gestSum.Close()
 
 	// ═══════════════════════════════════════════════════════════
-	// Pass 2: Crucible
+	// Pass 2: Crucible — output streamed from candidate container
 	// ═══════════════════════════════════════════════════════════
 
-	pass2Header := output.NewSection(w, "Pass 2: Crucible", 0, color)
-	pass2Header.Close()
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "    ══════════════════════════════════════════════════════════════")
+	fmt.Fprintln(w, "    Pass 2: Crucible — the calf will now self-assess its readiness to lead the tribe")
+	fmt.Fprintf(w, "    candidate: %s\n", crucibleTag)
+	fmt.Fprintln(w, "    ══════════════════════════════════════════════════════════════")
+	fmt.Fprintln(w)
 
 	// Collect credential env vars to forward
 	var envVars []string
