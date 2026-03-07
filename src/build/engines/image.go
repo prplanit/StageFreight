@@ -310,7 +310,11 @@ func autoInjectBuildArgs(existing map[string]string, det *build.Detection, v *bu
 	}
 	if argSet["BUILD_DATE"] {
 		if _, ok := existing["BUILD_DATE"]; !ok {
-			existing["BUILD_DATE"] = time.Now().UTC().Format(time.RFC3339)
+			if pinned := os.Getenv("STAGEFREIGHT_BUILD_DATE"); pinned != "" {
+				existing["BUILD_DATE"] = pinned
+			} else {
+				existing["BUILD_DATE"] = time.Now().UTC().Format(time.RFC3339)
+			}
 		}
 	}
 

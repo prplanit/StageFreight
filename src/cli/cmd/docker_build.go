@@ -547,7 +547,9 @@ func runCrucibleMode(cmd *cobra.Command, args []string) error {
 
 	// --- Dry run ---
 	if dbDryRun {
-		fmt.Fprintf(w, "\n    crucible dry-run: would build candidate %s, then self-rebuild via pass 2\n\n", crucibleTag)
+		fmt.Fprintf(w, "\n    crucible dry-run: would select candidate %s, then enter the crucible via pass 2\n\n", crucibleTag)
+		crucibleVerdict(w, "a promising calf has been selected",
+			"The tribe has selected a candidate for the crucible.")
 		return nil
 	}
 
@@ -695,6 +697,13 @@ func runCrucibleMode(cmd *cobra.Command, args []string) error {
 			}
 		}
 	}
+	// Forward BUILD_DATE from pass-1 plan to pin timestamps across passes
+	for _, step := range plan.Steps {
+		if bd, ok := step.BuildArgs["BUILD_DATE"]; ok {
+			envVars = append(envVars, "STAGEFREIGHT_BUILD_DATE="+bd)
+			break
+		}
+	}
 	// Forward CI env vars
 	for _, ciVar := range []string{
 		"CI", "CI_PIPELINE_ID", "CI_COMMIT_SHORT_SHA", "CI_COMMIT_SHA",
@@ -781,23 +790,23 @@ func runCrucibleMode(cmd *cobra.Command, args []string) error {
 	output.SummaryRow(w, "gestation", "success", "candidate built and loaded", color)
 
 	// Verification row
-	if cruciblePassed && verification != nil {
+	if verification != nil {
 		verStatus := "success"
 		if verification.HasHardFailure() {
 			verStatus = "failed"
 		}
 		output.SummaryRow(w, "verification", verStatus, build.TrustLevelLabel(verification.TrustLevel), color)
+	} else if cruciblePassed {
+		output.SummaryRow(w, "verification", "failed", "verification unavailable", color)
 	} else {
-		output.SummaryRow(w, "verification", "failed", "pass 2 did not complete", color)
+		output.SummaryRow(w, "verification", "failed", "not reached", color)
 	}
 
-	// Crucible row with lore
+	// Crucible row
 	if cruciblePassed {
-		output.SummaryRow(w, "crucible", "success",
-			"self-build verified — the calf has forged itself and joins the herd", color)
+		output.SummaryRow(w, "crucible", "success", "self-build verified", color)
 	} else {
-		output.SummaryRow(w, "crucible", "failed",
-			"self-build failed — this StageFreight calf was not yet mature enough to assume leadership of the tribe.", color)
+		output.SummaryRow(w, "crucible", "failed", "self-build failed", color)
 	}
 
 	// Provenance
@@ -873,11 +882,32 @@ func runCrucibleMode(cmd *cobra.Command, args []string) error {
 	output.SummaryTotal(w, totalElapsed, overallStatus, color)
 	sumSec.Close()
 
+	switch {
+	case !cruciblePassed:
+		crucibleVerdict(w, "the calf is not yet mature",
+			"Self-build failed; leadership remains with the current tribe leader.")
+	case verification != nil && verification.HasHardFailure():
+		crucibleVerdict(w, "self-awareness remains incomplete",
+			"The calf's self-assessment differs from the judgment of the tribe leader.")
+	default:
+		crucibleVerdict(w, "the calf has proven its maturity",
+			"This build now leads the tribe.")
+	}
+
 	if crucibleErr != nil {
 		return fmt.Errorf("crucible: %w", crucibleErr)
 	}
 
 	return nil
+}
+
+func crucibleVerdict(w io.Writer, title, body string) {
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "    ──────────────────────────────────────────────────────────────")
+	fmt.Fprintf(w, "    🐘 Crucible Verdict: %s\n", title)
+	fmt.Fprintf(w, "    %s\n", body)
+	fmt.Fprintln(w, "    ──────────────────────────────────────────────────────────────")
+	fmt.Fprintln(w)
 }
 
 // checkStatusIcon returns the appropriate icon for a verification check status.

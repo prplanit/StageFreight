@@ -64,10 +64,10 @@ func InjectLabels(plan *BuildPlan, labels map[string]string) {
 //   - BuildStep.Name, Dockerfile, Context, Target (build identity)
 //   - BuildStep.Platforms (affects output binary)
 //   - BuildStep.BuildArgs (minus BUILD_DATE — ephemeral timestamp)
-//   - BuildStep.Tags (identifies the output)
-//   - RegistryTarget.URL, Path, Tags (output destinations)
 //
 // Excluded fields (ephemeral or derived at runtime):
+//   - BuildStep.Tags (output naming, not build-affecting)
+//   - BuildStep.Registries (output destinations, not build-affecting)
 //   - BuildStep.Output (always "image" for docker)
 //   - BuildStep.Load, Push, SavePath (runtime strategy decisions)
 //   - BuildStep.Labels (metadata, not build-affecting)
@@ -105,34 +105,6 @@ func NormalizeBuildPlan(plan *BuildPlan) string {
 		sort.Strings(argKeys)
 		for _, k := range argKeys {
 			fmt.Fprintf(h, "arg:%s=%s\n", k, step.BuildArgs[k])
-		}
-
-		// Sorted tags
-		tags := make([]string, len(step.Tags))
-		copy(tags, step.Tags)
-		sort.Strings(tags)
-		fmt.Fprintf(h, "tags:%s\n", strings.Join(tags, ","))
-
-		// Registry targets (sorted by URL+Path, excluding ephemeral fields)
-		type regKey struct{ url, path string }
-		regs := make([]regKey, 0, len(step.Registries))
-		regMap := make(map[regKey][]string)
-		for _, r := range step.Registries {
-			k := regKey{r.URL, r.Path}
-			regs = append(regs, k)
-			t := make([]string, len(r.Tags))
-			copy(t, r.Tags)
-			sort.Strings(t)
-			regMap[k] = t
-		}
-		sort.Slice(regs, func(i, j int) bool {
-			if regs[i].url != regs[j].url {
-				return regs[i].url < regs[j].url
-			}
-			return regs[i].path < regs[j].path
-		})
-		for _, rk := range regs {
-			fmt.Fprintf(h, "reg:%s/%s:%s\n", rk.url, rk.path, strings.Join(regMap[rk], ","))
 		}
 	}
 	return fmt.Sprintf("%x", h.Sum(nil))
