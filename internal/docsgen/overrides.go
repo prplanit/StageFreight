@@ -91,6 +91,21 @@ var sectionOverrides = map[string]SectionOverride{
         text: release
         output: ".stagefreight/badges/release.svg"`,
 	},
+	"commit": {
+		Summary: "Commit subsystem configuration. Controls conventional commit formatting, type registry, and default behavior for `stagefreight commit`.",
+		Example: `commit:
+  default_type: docs
+  conventional: true
+  backend: git
+  skip_ci: false
+  push: false
+  types:
+    - key: feat
+      label: Feature
+    - key: breaking
+      label: Breaking
+      force_bang: true`,
+	},
 	"lint": {
 		Summary: "Linting configuration. Controls scan mode, module toggles, and per-module options. 9 modules: tabs, secrets, conflicts, filesize, linecount, unicode, yaml, lineendings, freshness.",
 		Example: `lint:
@@ -330,6 +345,49 @@ var fieldOverrides = map[string]FieldOverride{
 	},
 	"narrator.items.path": {
 		Description: "File path to include verbatim. `kind: include` only.",
+	},
+
+	// ── commit ───────────────────────────────────────────────────────────
+	"commit.default_type": {
+		Description: "Default commit type when --type is omitted.",
+		Default:     "chore",
+	},
+	"commit.default_scope": {
+		Description: "Default commit scope when --scope is omitted.",
+	},
+	"commit.skip_ci": {
+		Description: "Append `[skip ci]` to commit subjects by default.",
+		Default:     "false",
+	},
+	"commit.push": {
+		Description: "Push after committing by default.",
+		Default:     "false",
+	},
+	"commit.conventional": {
+		Description: "Use conventional commit format (`type(scope): summary`).",
+		Default:     "true",
+	},
+	"commit.backend": {
+		Description:   "Commit execution backend.",
+		AllowedValues: []string{"git", "dry-run"},
+		Default:       "git",
+	},
+	"commit.types": {
+		Description: "Recognized commit types for validation and alias resolution.",
+	},
+	"commit.types.key": {
+		Description: "Type identifier used in `--type` flag. Must match `^[a-z][a-z0-9_-]*$`.",
+		Required:    boolPtr(true),
+	},
+	"commit.types.label": {
+		Description: "Human-readable label for documentation and error messages.",
+	},
+	"commit.types.alias_for": {
+		Description: "Resolve this type to another type key. No alias chains allowed.",
+	},
+	"commit.types.force_bang": {
+		Description: "Force breaking change indicator (`!`) when this type is used.",
+		Default:     "false",
 	},
 
 	// ── lint ──────────────────────────────────────────────────────────────

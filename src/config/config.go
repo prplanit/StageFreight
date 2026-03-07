@@ -46,6 +46,9 @@ type Config struct {
 
 	// Security holds security scanning configuration (unchanged from v1).
 	Security SecurityConfig `yaml:"security"`
+
+	// Commit holds configuration for the commit subsystem.
+	Commit CommitConfig `yaml:"commit"`
 }
 
 // Load reads configuration from a YAML file.
@@ -95,5 +98,6 @@ func defaults() *Config {
 		Policies: DefaultPoliciesConfig(),
 		Lint:     DefaultLintConfig(),
 		Security: DefaultSecurityConfig(),
+		Commit:   DefaultCommitConfig(),
 	}
 }

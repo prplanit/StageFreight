@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -115,6 +116,49 @@ func Validate(cfg *Config) (warnings []string, err error) {
 
 			ierrs := validateNarratorItem(item, ipath)
 			errs = append(errs, ierrs...)
+		}
+	}
+
+	// ── Commit ────────────────────────────────────────────────────────────
+
+	commitTypeKeys := make(map[string]bool)
+	commitTypeKeyRe := regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+	for i, ct := range cfg.Commit.Types {
+		cpath := fmt.Sprintf("commit.types[%d]", i)
+
+		if ct.Key == "" {
+			errs = append(errs, fmt.Sprintf("%s: key is required", cpath))
+			continue
+		}
+		if !commitTypeKeyRe.MatchString(ct.Key) {
+			errs = append(errs, fmt.Sprintf("%s: key %q must match ^[a-z][a-z0-9_-]*$", cpath, ct.Key))
+		}
+		if commitTypeKeys[ct.Key] {
+			errs = append(errs, fmt.Sprintf("%s: duplicate key %q", cpath, ct.Key))
+		} else {
+			commitTypeKeys[ct.Key] = true
+		}
+
+		if ct.AliasFor != "" {
+			if !commitTypeKeys[ct.AliasFor] {
+				// Check forward: is target defined later?
+				found := false
+				for _, other := range cfg.Commit.Types {
+					if other.Key == ct.AliasFor {
+						found = true
+						break
+					}
+				}
+				if !found {
+					errs = append(errs, fmt.Sprintf("%s: alias_for %q references unknown type", cpath, ct.AliasFor))
+				}
+			}
+			// Check alias doesn't target another alias (no chains)
+			for _, other := range cfg.Commit.Types {
+				if other.Key == ct.AliasFor && other.AliasFor != "" {
+					errs = append(errs, fmt.Sprintf("%s: alias_for %q targets another alias (chains not allowed)", cpath, ct.AliasFor))
+				}
+			}
 		}
 	}
 

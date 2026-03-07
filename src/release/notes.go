@@ -53,6 +53,20 @@ var categoryOrder = []struct {
 	{"hotfix", "Hotfixes"},
 }
 
+// ResolvedTag is a single tag with an optional hyperlink to its tag page.
+type ResolvedTag struct {
+	Name string // e.g., "1.0.0"
+	URL  string // vendor-specific tag page URL, empty if not linkable
+}
+
+// ImageRow is a single registry/image row for the Image Availability table.
+type ImageRow struct {
+	RegistryLabel string        // human label (e.g., "Docker Hub")
+	RegistryURL   string        // link to repo root on the registry
+	ImageRef      string        // full image ref (e.g., "docker.io/prplanit/stagefreight")
+	Tags          []ResolvedTag // resolved tags in config order
+}
+
 // NotesInput holds all data needed to render release notes.
 type NotesInput struct {
 	RepoDir      string // git repository directory
@@ -65,6 +79,7 @@ type NotesInput struct {
 	Version      string // version string (auto-detected if empty)
 	SHA          string // short commit hash (auto-detected if empty)
 	IsPrerelease bool   // true if version has prerelease suffix
+	Images       []ImageRow // resolved registry image rows for availability table
 }
 
 // GenerateNotes produces markdown release notes from git log between two refs.
@@ -311,14 +326,43 @@ func renderNotes(input NotesInput, categories []CommitCategory, allCommits []Com
 		b.WriteString(fmt.Sprintf("**Security:** %s\n\n", input.SecurityTile))
 	}
 
-	// 3. Highlights (tag message)
+	// 3. Image Availability table
+	if len(input.Images) > 0 {
+		b.WriteString("## Image Availability\n\n")
+		b.WriteString("| Registry | Image | Tags |\n")
+		b.WriteString("|----------|-------|------|\n")
+		for _, img := range input.Images {
+			// Registry cell: linked label or plain text
+			var regCell string
+			if img.RegistryURL != "" {
+				regCell = fmt.Sprintf("[%s](%s)", img.RegistryLabel, img.RegistryURL)
+			} else {
+				regCell = img.RegistryLabel
+			}
+
+			// Tags cell: each tag individually linked or plain code
+			tagParts := make([]string, 0, len(img.Tags))
+			for _, t := range img.Tags {
+				if t.URL != "" {
+					tagParts = append(tagParts, fmt.Sprintf("[`%s`](%s)", t.Name, t.URL))
+				} else {
+					tagParts = append(tagParts, fmt.Sprintf("`%s`", t.Name))
+				}
+			}
+
+			b.WriteString(fmt.Sprintf("| %s | `%s` | %s |\n", regCell, img.ImageRef, strings.Join(tagParts, " ")))
+		}
+		b.WriteString("\n")
+	}
+
+	// 4. Highlights (tag message)
 	if input.TagMessage != "" {
 		b.WriteString("## Highlights\n")
 		b.WriteString(bulletize(input.TagMessage))
 		b.WriteString("\n\n")
 	}
 
-	// 4. Notable Changes (H2 wrapper, H4 categories)
+	// 5. Notable Changes (H2 wrapper, H4 categories)
 	if len(categories) > 0 {
 		b.WriteString("## Notable Changes\n\n")
 		for _, cat := range categories {
@@ -338,17 +382,17 @@ func renderNotes(input NotesInput, categories []CommitCategory, allCommits []Com
 		}
 	}
 
-	// 5. Security section
+	// 6. Security section
 	if input.SecurityBody != "" {
 		b.WriteString("## Security\n\n")
 		b.WriteString(input.SecurityBody)
 		b.WriteString("\n")
 	}
 
-	// 6. Horizontal rule
+	// 7. Horizontal rule
 	b.WriteString("---\n\n")
 
-	// 7. Full changelog (always present, collapsible)
+	// 8. Full changelog (always present, collapsible)
 	b.WriteString("<details>\n<summary>Full changelog</summary>\n\n")
 	if len(allCommits) == 0 {
 		b.WriteString("No changes found.\n")

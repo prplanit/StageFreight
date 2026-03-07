@@ -118,6 +118,42 @@ func runReleaseCreate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Build image availability rows from matched registry targets
+	currentTag := os.Getenv("CI_COMMIT_TAG")
+	var imageRows []release.ImageRow
+	for _, t := range collectTargetsByKind(cfg, "registry") {
+		if !targetWhenMatches(t, currentTag) {
+			continue
+		}
+		regProvider := t.Provider
+		if regProvider == "" {
+			regProvider = build.DetectProvider(t.URL)
+		}
+		if p, err := registry.CanonicalProvider(regProvider); err == nil {
+			regProvider = p
+		} else {
+			regProvider = "generic"
+		}
+
+		resolvedPath := gitver.ResolveVars(t.Path, cfg.Vars)
+		resolvedTags := gitver.ResolveTags(t.Tags, versionInfo)
+
+		tags := make([]release.ResolvedTag, 0, len(resolvedTags))
+		for _, rt := range resolvedTags {
+			tags = append(tags, release.ResolvedTag{
+				Name: rt,
+				URL:  registryTagURL(t.URL, resolvedPath, rt, regProvider),
+			})
+		}
+
+		imageRows = append(imageRows, release.ImageRow{
+			RegistryLabel: vendorDisplayName(regProvider),
+			RegistryURL:   registryRepoURL(t.URL, resolvedPath, regProvider),
+			ImageRef:      fmt.Sprintf("%s/%s", t.URL, resolvedPath),
+			Tags:          tags,
+		})
+	}
+
 	// Generate or load release notes
 	var notes string
 	if rcNotesFile != "" {
@@ -139,6 +175,7 @@ func runReleaseCreate(cmd *cobra.Command, args []string) error {
 			Version:      versionInfo.Version,
 			SHA:          sha,
 			IsPrerelease: versionInfo.IsPrerelease,
+			Images:       imageRows,
 		}
 		notes, err = release.GenerateNotes(input)
 		if err != nil {
@@ -535,6 +572,43 @@ func hasActionFailures(results []actionResult) bool {
 		}
 	}
 	return false
+}
+
+// registryRepoURL returns the web URL for a registry image's root page.
+func registryRepoURL(url, path, provider string) string {
+	switch provider {
+	case "docker":
+		return fmt.Sprintf("https://hub.docker.com/r/%s", path)
+	case "github":
+		return fmt.Sprintf("https://github.com/%s/pkgs/container/%s", ownerFromPath(path), repoFromPath(path))
+	case "quay":
+		return fmt.Sprintf("https://quay.io/repository/%s", path)
+	case "gitlab":
+		return fmt.Sprintf("%s/%s/container_registry", url, path)
+	case "jfrog":
+		return fmt.Sprintf("https://%s/ui/repos/tree/General/%s", url, path)
+	default:
+		return ""
+	}
+}
+
+// registryTagURL returns the web URL for a specific tag on a registry.
+// Returns empty string if the vendor doesn't support clean tag page URLs.
+func registryTagURL(url, path, tag, provider string) string {
+	switch provider {
+	case "docker":
+		return fmt.Sprintf("https://hub.docker.com/r/%s/tags?name=%s", path, tag)
+	case "github":
+		return fmt.Sprintf("https://github.com/%s/pkgs/container/%s", ownerFromPath(path), repoFromPath(path))
+	case "quay":
+		return fmt.Sprintf("https://quay.io/repository/%s?tag=%s", path, tag)
+	case "gitlab":
+		return fmt.Sprintf("%s/%s/container_registry", url, path)
+	case "jfrog":
+		return fmt.Sprintf("https://%s/ui/repos/tree/General/%s", url, path)
+	default:
+		return ""
+	}
 }
 
 // buildRegistryLinkFromTarget creates a forge release link for a registry target.

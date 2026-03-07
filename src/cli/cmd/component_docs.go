@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -9,7 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/sofmeright/stagefreight/src/component"
-	"github.com/sofmeright/stagefreight/src/forge"
 	"github.com/sofmeright/stagefreight/src/output"
 	"github.com/sofmeright/stagefreight/src/registry"
 )
@@ -18,8 +16,6 @@ var (
 	cdSpecs      []string
 	cdOutputFile string
 	cdReadme     string
-	cdCommit     bool
-	cdBranch     string
 )
 
 var componentDocsCmd = &cobra.Command{
@@ -35,8 +31,7 @@ Supports custom group metadata via comments:
 Output modes:
   - Default: print markdown to stdout
   - --output: write markdown to a file
-  - --readme: inject docs between markers in target file
-  - --commit: inject docs and commit updated file via forge API`,
+  - --readme: inject docs between markers in target file`,
 	RunE: runComponentDocs,
 }
 
@@ -44,8 +39,6 @@ func init() {
 	componentDocsCmd.Flags().StringSliceVar(&cdSpecs, "spec", nil, "component spec file(s) to parse (repeatable)")
 	componentDocsCmd.Flags().StringVarP(&cdOutputFile, "output", "o", "", "write docs to file")
 	componentDocsCmd.Flags().StringVar(&cdReadme, "readme", "", "inject docs between <!-- sf:<name> --> markers in target file (section name from narrator config)")
-	componentDocsCmd.Flags().BoolVar(&cdCommit, "commit", false, "commit updated target file via forge API")
-	componentDocsCmd.Flags().StringVar(&cdBranch, "branch", "", "branch to commit to")
 
 	componentCmd.AddCommand(componentDocsCmd)
 }
@@ -65,8 +58,8 @@ func runComponentDocs(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("no spec files specified; use --spec or configure a gitlab-component target in .stagefreight.yml")
 	}
 
-	if cdOutputFile != "" && (cdReadme != "" || cdCommit) {
-		return fmt.Errorf("--output cannot be combined with --readme/--commit")
+	if cdOutputFile != "" && cdReadme != "" {
+		return fmt.Errorf("--output cannot be combined with --readme")
 	}
 
 	start := time.Now()
@@ -94,7 +87,7 @@ func runComponentDocs(cmd *cobra.Command, args []string) error {
 
 	// Resolve target file: --readme CLI flag → narrator config lookup
 	target := cdReadme
-	if target == "" && cdCommit {
+	if target == "" {
 		target = cfgTarget
 	}
 
@@ -113,7 +106,7 @@ func runComponentDocs(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Output mode: --readme or --commit (marker injection)
+	// Output mode: --readme (marker injection)
 	if target != "" {
 		sectionName := cfgSection
 		if sectionName == "" {
@@ -141,17 +134,6 @@ func runComponentDocs(cmd *cobra.Command, args []string) error {
 			}
 		}
 
-		// Optionally commit via forge API — skip if content is unchanged.
-		if cdCommit && !unchanged {
-			rootDir, err := os.Getwd()
-			if err != nil {
-				return fmt.Errorf("getting working directory: %w", err)
-			}
-			if err := commitReadme(rootDir, target, updated); err != nil {
-				return err
-			}
-		}
-
 		elapsed := time.Since(start)
 		useColor := output.UseColor()
 		w := os.Stdout
@@ -164,9 +146,6 @@ func runComponentDocs(cmd *cobra.Command, args []string) error {
 		} else {
 			status = "success"
 			detail = "updated"
-			if cdCommit {
-				detail = "updated + committed"
-			}
 		}
 		output.RowStatus(sec, target, detail, status, useColor)
 		sec.Close()
@@ -221,50 +200,6 @@ func extractSectionName(marker string) string {
 	s = strings.TrimSuffix(s, ":start")
 
 	return s
-}
-
-// commitReadme commits the updated README via the forge API.
-func commitReadme(rootDir, readmePath, content string) error {
-	ctx := context.Background()
-
-	remoteURL, err := detectRemoteURL(rootDir)
-	if err != nil {
-		return fmt.Errorf("detecting remote: %w", err)
-	}
-
-	provider := forge.DetectProvider(remoteURL)
-	forgeClient, err := newForgeClient(provider, remoteURL)
-	if err != nil {
-		return err
-	}
-
-	branch := cdBranch
-	if branch == "" {
-		branch = os.Getenv("CI_COMMIT_BRANCH")
-	}
-	if branch == "" {
-		branch = os.Getenv("CI_DEFAULT_BRANCH")
-	}
-	if branch == "" {
-		return fmt.Errorf("no branch specified: use --branch or set CI_COMMIT_BRANCH")
-	}
-
-	commitMsg := "docs: update component input documentation"
-	if os.Getenv("CI") != "" || os.Getenv("GITLAB_CI") != "" {
-		commitMsg += " [skip ci]"
-	}
-
-	if err := forgeClient.CommitFile(ctx, forge.CommitFileOptions{
-		Branch:  branch,
-		Path:    readmePath,
-		Content: []byte(content),
-		Message: commitMsg,
-	}); err != nil {
-		return fmt.Errorf("committing README: %w", err)
-	}
-
-	fmt.Printf("  docs %s → %s on %s\n", colorGreen("✓"), readmePath, branch)
-	return nil
 }
 
 // normalizeContent normalizes line endings (CRLF → LF) and ensures a trailing newline
