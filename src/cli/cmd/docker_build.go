@@ -531,22 +531,16 @@ func runCrucibleMode(cmd *cobra.Command, args []string) error {
 	// Banner
 	output.Banner(w, output.NewBannerInfo(version.Version, version.Commit, ""), color)
 
-	// Context block with crucible-specific fields
-	kv := buildContextKV()
-	kv = append(kv,
-		output.KV{Key: "Mode", Value: "crucible"},
-		output.KV{Key: "Self-host", Value: "enabled"},
-		output.KV{Key: "Status", Value: "CALF (self-build verification)"},
-		output.KV{Key: "Passes", Value: "2 (gestation → crucible)"},
-	)
-	output.ContextBlock(w, kv)
+	// CI context block (Pipeline, Runner, Commit, Branch, Registries)
+	output.ContextBlock(w, buildContextKV())
 
-	// Crucible Context section
+	// Crucible Context section — mode, lifecycle, and execution details
 	crucibleCtx := output.NewSection(w, "Crucible Context", 0, color)
+	crucibleCtx.Row("%-16s%s", "mode", "crucible")
+	crucibleCtx.Row("%-16s%s", "stage", "CALF — self-build verification")
+	crucibleCtx.Row("%-16s%s", "passes", "2 (gestation → crucible)")
 	crucibleCtx.Row("%-16s%s", "candidate", crucibleTag)
-	crucibleCtx.Row("%-16s%s", "final", finalTag)
-	crucibleCtx.Row("%-16s%s", "canonical", "pass 2 output")
-	crucibleCtx.Row("%-16s%s", "recursion", "guarded")
+	crucibleCtx.Row("%-16s%s", "verify", finalTag)
 	crucibleCtx.Row("%-16s%s", "platform p1", fmt.Sprintf("linux/%s", runtime.GOARCH))
 	crucibleCtx.Row("%-16s%s", "platform p2", "configured build platforms")
 	crucibleCtx.Close()
