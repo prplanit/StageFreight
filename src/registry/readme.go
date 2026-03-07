@@ -66,33 +66,81 @@ func extractMarkers(content, start, end string) (string, error) {
 	return strings.TrimSpace(content[startIdx : startIdx+endIdx]), nil
 }
 
-// rewriteRelativeLinks rewrites relative markdown links and images to absolute URLs.
-// Skips http://, https://, /absolute, #anchor, and mailto: links.
-var linkPattern = regexp.MustCompile(`(\[(?:[^\]]*)\]\()([^)]+)(\))`)
+// rewriteRelativeLinks rewrites relative links and image sources to absolute URLs.
+// Uses linkBase for clickable links (markdown [text](path), HTML href) and
+// rawBase (derived from linkBase) for embeddable assets (markdown ![alt](path), HTML img src).
+//
+// Skips: http://, https://, mailto:, data:, #anchor, protocol-relative //.
+var (
+	mdImagePattern  = regexp.MustCompile(`(!\[[^\]]*\]\()([^)]+)(\))`)
+	mdLinkPattern   = regexp.MustCompile(`(\[[^\]]+\]\()([^)]+)(\))`)
+	htmlImgSrcPattern = regexp.MustCompile(`(?i)(<img\b[^>]*\bsrc=["'])([^"']+)(["'][^>]*>)`)
+	htmlHrefPattern   = regexp.MustCompile(`(?i)(\bhref=["'])([^"']+)(["'])`)
+)
 
-func rewriteRelativeLinks(content, base string) string {
-	base = strings.TrimRight(base, "/")
+func rewriteRelativeLinks(content, linkBase string) string {
+	linkBase = strings.TrimRight(linkBase, "/")
+	rawBase := DeriveRawBase(linkBase)
 
-	return linkPattern.ReplaceAllStringFunc(content, func(match string) string {
-		parts := linkPattern.FindStringSubmatch(match)
-		if len(parts) != 4 {
-			return match
+	isRelative := func(s string) bool {
+		if s == "" {
+			return false
 		}
+		l := strings.ToLower(s)
+		return !strings.HasPrefix(l, "http://") &&
+			!strings.HasPrefix(l, "https://") &&
+			!strings.HasPrefix(l, "mailto:") &&
+			!strings.HasPrefix(l, "data:") &&
+			!strings.HasPrefix(s, "#") &&
+			!strings.HasPrefix(s, "//") &&
+			!strings.HasPrefix(s, "/")
+	}
 
-		href := parts[2]
+	join := func(base, rel string) string {
+		return base + "/" + strings.TrimPrefix(rel, "./")
+	}
 
-		// Skip absolute URLs, anchors, and mailto
-		if strings.HasPrefix(href, "http://") || strings.HasPrefix(href, "https://") ||
-			strings.HasPrefix(href, "/") || strings.HasPrefix(href, "#") ||
-			strings.HasPrefix(href, "mailto:") {
-			return match
+	// Markdown images: ![alt](path) → rawBase
+	if rawBase != "" {
+		content = mdImagePattern.ReplaceAllStringFunc(content, func(m string) string {
+			sub := mdImagePattern.FindStringSubmatch(m)
+			if len(sub) != 4 || !isRelative(sub[2]) {
+				return m
+			}
+			return sub[1] + join(rawBase, sub[2]) + sub[3]
+		})
+	}
+
+	// Markdown links: [text](path) → linkBase
+	content = mdLinkPattern.ReplaceAllStringFunc(content, func(m string) string {
+		sub := mdLinkPattern.FindStringSubmatch(m)
+		if len(sub) != 4 || !isRelative(sub[2]) {
+			return m
 		}
-
-		// Strip leading ./ if present
-		href = strings.TrimPrefix(href, "./")
-
-		return parts[1] + base + "/" + href + parts[3]
+		return sub[1] + join(linkBase, sub[2]) + sub[3]
 	})
+
+	// HTML img src="..." → rawBase
+	if rawBase != "" {
+		content = htmlImgSrcPattern.ReplaceAllStringFunc(content, func(m string) string {
+			sub := htmlImgSrcPattern.FindStringSubmatch(m)
+			if len(sub) != 4 || !isRelative(sub[2]) {
+				return m
+			}
+			return sub[1] + join(rawBase, sub[2]) + sub[3]
+		})
+	}
+
+	// HTML href="..." → linkBase
+	content = htmlHrefPattern.ReplaceAllStringFunc(content, func(m string) string {
+		sub := htmlHrefPattern.FindStringSubmatch(m)
+		if len(sub) != 4 || !isRelative(sub[2]) {
+			return m
+		}
+		return sub[1] + join(linkBase, sub[2]) + sub[3]
+	})
+
+	return content
 }
 
 // DeriveRawBase auto-derives a raw file URL base from a link_base URL.
