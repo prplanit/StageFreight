@@ -119,7 +119,7 @@ func CrucibleTag(purpose, runID string) string {
 func RunCrucible(ctx context.Context, opts CrucibleOpts) (*CrucibleResult, error) {
 	result := &CrucibleResult{FinalImageRef: opts.FinalTag}
 
-	args := []string{"run", "--rm"}
+	args := []string{"run", "--rm", "--network", "host"}
 
 	// Docker socket: forward DOCKER_HOST + TLS vars, or mount the socket
 	dockerHost := os.Getenv("DOCKER_HOST")
@@ -160,7 +160,7 @@ func RunCrucible(ctx context.Context, opts CrucibleOpts) (*CrucibleResult, error
 	innerFlags = append(innerFlags, va.AppendFlags()...)
 
 	shellCmd := fmt.Sprintf(
-		"docker buildx create --name sf-crucible --use 2>/dev/null; docker buildx inspect --bootstrap 2>/dev/null; stagefreight docker build %s",
+		"docker buildx create --name sf-crucible --driver-opt network=host --use 2>/dev/null; docker buildx inspect --bootstrap 2>/dev/null; stagefreight docker build %s",
 		strings.Join(innerFlags, " "),
 	)
 	args = append(args, "sh", "-c", shellCmd)
