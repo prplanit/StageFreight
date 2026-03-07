@@ -300,6 +300,315 @@ func applyGoUpdates(ctx context.Context, deps []freshness.Dependency, repoRoot s
 	return applied, skipped, touchedDirs, nil
 }
 
+// goDirectiveSyncTarget maps a Dockerfile golang builder update to its owning module.
+type goDirectiveSyncTarget struct {
+	ModuleDir string // repo-relative dir containing go.mod ("." for root)
+	GoVersion string // target Go version from the builder image (full patch)
+	Source    string // Dockerfile path that triggered the sync
+}
+
+// ToolchainDependency records a resolved build toolchain for reporting and SBOM.
+type ToolchainDependency struct {
+	Ecosystem    string // "golang"
+	Name         string // "go"
+	Version      string // "1.26.1"
+	BuilderImage string // "docker.io/library/golang:1.26.1-alpine3.23"
+	Dockerfile   string // repo-relative Dockerfile path
+	ModuleDir    string // repo-relative module dir
+}
+
+// hasAppliedGolangBuilderUpdate returns true if any applied update was a golang builder image.
+func hasAppliedGolangBuilderUpdate(applied []AppliedUpdate) bool {
+	for _, a := range applied {
+		if a.Dep.Ecosystem == freshness.EcosystemDockerImage && isGolangImage(a.Dep.Name) {
+			return true
+		}
+	}
+	return false
+}
+
+// syncGoDirectivesFromResolved bumps go directives in go.mod files to match their
+// associated Dockerfile golang builder versions, using pre-computed sync targets.
+func syncGoDirectivesFromResolved(ctx context.Context, repoRoot string, result *UpdateResult, resolved goDirectiveSyncResult) error {
+	// Surface conflicted modules as skipped entries with version details
+	for _, conflict := range resolved.Conflicted {
+		detail := fmt.Sprintf("conflicting golang builder versions in %s: %s (from %s)",
+			conflict.ModuleDir,
+			strings.Join(conflict.Versions, " vs "),
+			strings.Join(conflict.Sources, ", "))
+		result.Skipped = append(result.Skipped, SkippedDep{
+			Dep: freshness.Dependency{
+				Name:      "stdlib",
+				Ecosystem: freshness.EcosystemGoMod,
+				File:      moduleGoModPath(conflict.ModuleDir),
+			},
+			Reason: detail,
+		})
+	}
+
+	if len(resolved.Targets) == 0 {
+		return nil
+	}
+
+	runGo, err := resolveGoRunner(repoRoot)
+	if err != nil {
+		return err
+	}
+
+	for _, t := range resolved.Targets {
+		modFile := filepath.Join(repoRoot, t.ModuleDir, "go.mod")
+		if _, err := os.Stat(modFile); err != nil {
+			continue
+		}
+
+		cur := parseGoDirectiveFromFile(modFile)
+		if cur == "" || cur == t.GoVersion {
+			continue
+		}
+
+		absDir := filepath.Join(repoRoot, t.ModuleDir)
+
+		out, err := runGo(ctx, absDir, "mod", "edit", "-go="+t.GoVersion)
+		if err != nil {
+			return fmt.Errorf("go mod edit -go=%s in %s: %s\n%w", t.GoVersion, t.ModuleDir, string(out), err)
+		}
+
+		out, err = runGo(ctx, absDir, "mod", "tidy")
+		if err != nil {
+			return fmt.Errorf("go mod tidy in %s: %s\n%w", t.ModuleDir, string(out), err)
+		}
+
+		result.Applied = append(result.Applied, AppliedUpdate{
+			Dep: freshness.Dependency{
+				Name:      "stdlib",
+				Current:   cur,
+				Latest:    t.GoVersion,
+				Ecosystem: freshness.EcosystemGoMod,
+				File:      moduleGoModPath(t.ModuleDir),
+			},
+			OldVer:     cur,
+			NewVer:     t.GoVersion,
+			UpdateType: updateType(cur, t.GoVersion),
+		})
+
+		found := false
+		for _, d := range result.TouchedModuleDirs {
+			if d == t.ModuleDir {
+				found = true
+				break
+			}
+		}
+		if !found {
+			result.TouchedModuleDirs = append(result.TouchedModuleDirs, t.ModuleDir)
+		}
+	}
+
+	return nil
+}
+
+// goDirectiveConflict records a module with conflicting golang builder versions.
+type goDirectiveConflict struct {
+	ModuleDir string   // repo-relative module dir
+	Versions  []string // the conflicting Go versions (e.g. ["1.26.1", "1.25.7"])
+	Sources   []string // Dockerfile paths that caused the conflict
+}
+
+// goDirectiveSyncResult holds resolved targets and any conflicted modules.
+type goDirectiveSyncResult struct {
+	Targets    []goDirectiveSyncTarget
+	Conflicted []goDirectiveConflict
+}
+
+// collectGoDirectiveSyncTargets maps applied golang builder Docker updates to
+// their owning Go module directories. Each Dockerfile is mapped to the nearest
+// ancestor directory containing a go.mod file.
+//
+// If two Dockerfiles in the same module want different Go versions, the module
+// is marked conflicted and skipped entirely — no silent winner-picking.
+func collectGoDirectiveSyncTargets(repoRoot string, applied []AppliedUpdate) goDirectiveSyncResult {
+	byModuleDir := make(map[string]goDirectiveSyncTarget)
+	conflicted := make(map[string]bool)
+
+	for _, a := range applied {
+		if a.Dep.Ecosystem != freshness.EcosystemDockerImage || !isGolangImage(a.Dep.Name) {
+			continue
+		}
+
+		goVer := extractGoVersionFromTag(a.NewVer)
+		if goVer == "" {
+			continue
+		}
+
+		moduleDir := findNearestGoMod(repoRoot, filepath.Dir(a.Dep.File))
+		if moduleDir == "" {
+			continue
+		}
+
+		if conflicted[moduleDir] {
+			continue
+		}
+
+		if existing, ok := byModuleDir[moduleDir]; ok {
+			if existing.GoVersion != goVer {
+				delete(byModuleDir, moduleDir)
+				conflicted[moduleDir] = true
+				continue
+			}
+		}
+
+		byModuleDir[moduleDir] = goDirectiveSyncTarget{
+			ModuleDir: moduleDir,
+			GoVersion: goVer,
+			Source:    a.Dep.File,
+		}
+	}
+
+	targets := make([]goDirectiveSyncTarget, 0, len(byModuleDir))
+	for _, t := range byModuleDir {
+		targets = append(targets, t)
+	}
+	sort.Slice(targets, func(i, j int) bool {
+		return targets[i].ModuleDir < targets[j].ModuleDir
+	})
+
+	var conflicts []goDirectiveConflict
+	for dir := range conflicted {
+		conflicts = append(conflicts, collectConflictDetail(applied, repoRoot, dir))
+	}
+	sort.Slice(conflicts, func(i, j int) bool {
+		return conflicts[i].ModuleDir < conflicts[j].ModuleDir
+	})
+
+	return goDirectiveSyncResult{Targets: targets, Conflicted: conflicts}
+}
+
+// collectToolchainDepsFromResolved builds toolchain dependency records from
+// pre-computed sync targets, ensuring toolchain metadata matches what was synced.
+func collectToolchainDepsFromResolved(resolved goDirectiveSyncResult, applied []AppliedUpdate) []ToolchainDependency {
+	if len(resolved.Targets) == 0 {
+		return nil
+	}
+
+	// Index applied golang builder updates by Dockerfile path
+	bySource := make(map[string]AppliedUpdate)
+	for _, a := range applied {
+		if a.Dep.Ecosystem == freshness.EcosystemDockerImage && isGolangImage(a.Dep.Name) {
+			bySource[a.Dep.File] = a
+		}
+	}
+
+	deps := make([]ToolchainDependency, 0, len(resolved.Targets))
+	for _, t := range resolved.Targets {
+		a, ok := bySource[t.Source]
+		if !ok {
+			continue
+		}
+		deps = append(deps, ToolchainDependency{
+			Ecosystem:    "golang",
+			Name:         "go",
+			Version:      t.GoVersion,
+			BuilderImage: a.Dep.Name + ":" + a.NewVer,
+			Dockerfile:   t.Source,
+			ModuleDir:    t.ModuleDir,
+		})
+	}
+	return deps
+}
+
+// collectConflictDetail gathers the specific versions and Dockerfiles that caused
+// a conflict for a given module directory.
+func collectConflictDetail(applied []AppliedUpdate, repoRoot, moduleDir string) goDirectiveConflict {
+	seenVer := make(map[string]bool)
+	var versions []string
+	var sources []string
+
+	for _, a := range applied {
+		if a.Dep.Ecosystem != freshness.EcosystemDockerImage || !isGolangImage(a.Dep.Name) {
+			continue
+		}
+		goVer := extractGoVersionFromTag(a.NewVer)
+		if goVer == "" {
+			continue
+		}
+		dir := findNearestGoMod(repoRoot, filepath.Dir(a.Dep.File))
+		if dir != moduleDir {
+			continue
+		}
+		sources = append(sources, a.Dep.File)
+		if !seenVer[goVer] {
+			seenVer[goVer] = true
+			versions = append(versions, goVer)
+		}
+	}
+
+	sort.Strings(versions)
+	sort.Strings(sources)
+
+	return goDirectiveConflict{
+		ModuleDir: moduleDir,
+		Versions:  versions,
+		Sources:   sources,
+	}
+}
+
+// findNearestGoMod walks up from relDir toward repoRoot looking for a go.mod file.
+// Returns the repo-relative directory containing go.mod, or "" if not found.
+func findNearestGoMod(repoRoot, relDir string) string {
+	dir := relDir
+	for {
+		candidate := filepath.Join(repoRoot, dir, "go.mod")
+		if _, err := os.Stat(candidate); err == nil {
+			return dir
+		}
+		if dir == "." || dir == "" {
+			break
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	if _, err := os.Stat(filepath.Join(repoRoot, "go.mod")); err == nil {
+		return "."
+	}
+	return ""
+}
+
+// moduleGoModPath returns a clean repo-relative path to go.mod for a module dir.
+func moduleGoModPath(moduleDir string) string {
+	if moduleDir == "." || moduleDir == "" {
+		return "go.mod"
+	}
+	return filepath.Join(moduleDir, "go.mod")
+}
+
+// isGolangImage returns true if the image name is a golang builder.
+func isGolangImage(name string) bool {
+	n := strings.ToLower(name)
+	return n == "golang" || n == "library/golang" ||
+		strings.HasSuffix(n, "/golang") || strings.HasSuffix(n, "/library/golang")
+}
+
+// extractGoVersionFromTag extracts the Go version from a Docker tag.
+// Returns the full patch version (e.g. "1.26.1") — the go directive should
+// reflect the exact stdlib version used by the builder for accurate CVE scanning.
+func extractGoVersionFromTag(tag string) string {
+	ver := tag
+	if idx := strings.IndexByte(ver, '-'); idx > 0 {
+		ver = ver[:idx]
+	}
+	for _, c := range ver {
+		if c != '.' && (c < '0' || c > '9') {
+			return ""
+		}
+	}
+	if ver == "" {
+		return ""
+	}
+	return ver
+}
+
 // detectReplaceDirectives parses go.mod and returns a set of replaced module paths.
 func detectReplaceDirectives(moduleDir string) (map[string]bool, error) {
 	gomod := filepath.Join(moduleDir, "go.mod")

@@ -14,6 +14,7 @@ import (
 type UpdateResult struct {
 	Applied           []AppliedUpdate
 	Skipped           []SkippedDep
+	Toolchains        []ToolchainDependency // resolved build toolchains for SBOM/reporting
 	Verified          bool
 	VerifyLog         string
 	VerifyErr         error
@@ -80,6 +81,15 @@ func Update(ctx context.Context, cfg UpdateConfig, deps []freshness.Dependency) 
 		}
 		result.Applied = append(result.Applied, applied...)
 		result.Skipped = append(result.Skipped, dkSkipped...)
+	}
+
+	// 5b. Sync go directive to match applied golang builder updates
+	if hasAppliedGolangBuilderUpdate(result.Applied) {
+		resolved := collectGoDirectiveSyncTargets(repoRoot, result.Applied)
+		if err := syncGoDirectivesFromResolved(ctx, repoRoot, result, resolved); err != nil {
+			return result, fmt.Errorf("syncing go directives: %w", err)
+		}
+		result.Toolchains = collectToolchainDepsFromResolved(resolved, result.Applied)
 	}
 
 	// 6. Verify — only run on Go module dirs that were actually updated
