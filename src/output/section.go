@@ -69,20 +69,24 @@ func StatusIcon(status string, color bool) string {
 	if !color {
 		switch status {
 		case "success":
-			return "✓"
+			return "✅"
 		case "failed":
-			return "✗"
+			return "❌"
+		case "warning":
+			return "⚠️"
 		default:
-			return "⊘"
+			return "⏭️"
 		}
 	}
 	switch status {
 	case "success":
-		return "\033[32m✓\033[0m"
+		return "\033[32m✅\033[0m"
 	case "failed":
-		return "\033[31m✗\033[0m"
+		return "\033[31m❌\033[0m"
+	case "warning":
+		return "\033[33m⚠️\033[0m"
 	default:
-		return "\033[33m⊘\033[0m"
+		return "\033[33m⏭️\033[0m"
 	}
 }
 

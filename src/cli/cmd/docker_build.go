@@ -929,6 +929,8 @@ func checkStatusIcon(status string, color bool) string {
 		return output.StatusIcon("success", color)
 	case "differs":
 		return output.StatusIcon("failed", color)
+	case "info":
+		return output.StatusIcon("warning", color)
 	default:
 		return output.StatusIcon("skipped", color)
 	}

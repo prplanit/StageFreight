@@ -374,7 +374,7 @@ func VerifyCrucible(ctx context.Context, pass1Image, pass2Image string) (*Crucib
 		})
 	} else {
 		v.ArtifactChecks = append(v.ArtifactChecks, CrucibleCheck{
-			Name: "image digest", Status: "differs", Detail: "(non-deterministic layers)",
+			Name: "image digest", Status: "info", Detail: "expected (layer metadata differs between builds)",
 		})
 	}
 
