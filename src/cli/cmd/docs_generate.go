@@ -1,0 +1,78 @@
+package cmd
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"time"
+
+	"github.com/spf13/cobra"
+	"github.com/sofmeright/stagefreight/internal/docsgen"
+	"github.com/sofmeright/stagefreight/src/output"
+)
+
+var (
+	dgOutputDir string
+)
+
+var docsGenerateCmd = &cobra.Command{
+	Use:   "generate",
+	Short: "Generate reference documentation from code",
+	Long: `Generate CLI and config reference documentation as markdown fragments.
+
+Output files are written to docs/modules/ and are designed to be assembled
+into reference pages via narrator's kind: include.
+
+Generated files:
+  docs/modules/cli-reference.md     — CLI command reference from Cobra tree
+  docs/modules/config-reference.md  — Config schema reference from Go structs`,
+	RunE: runDocsGenerate,
+}
+
+func init() {
+	docsGenerateCmd.Flags().StringVar(&dgOutputDir, "output-dir", "docs/modules", "output directory for generated fragments")
+
+	docsCmd.AddCommand(docsGenerateCmd)
+}
+
+func runDocsGenerate(cmd *cobra.Command, args []string) error {
+	rootDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("getting working directory: %w", err)
+	}
+
+	outDir := dgOutputDir
+	if !filepath.IsAbs(outDir) {
+		outDir = filepath.Join(rootDir, outDir)
+	}
+
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return fmt.Errorf("creating output directory: %w", err)
+	}
+
+	start := time.Now()
+	color := output.UseColor()
+	w := os.Stdout
+
+	// Generate CLI reference from Cobra command tree.
+	cliRef := docsgen.GenerateCLIReference(rootCmd)
+	cliPath := filepath.Join(outDir, "cli-reference.md")
+	if err := os.WriteFile(cliPath, []byte(cliRef), 0o644); err != nil {
+		return fmt.Errorf("writing CLI reference: %w", err)
+	}
+
+	// Generate config reference from struct metadata + overrides.
+	configRef := docsgen.GenerateConfigReference()
+	configPath := filepath.Join(outDir, "config-reference.md")
+	if err := os.WriteFile(configPath, []byte(configRef), 0o644); err != nil {
+		return fmt.Errorf("writing config reference: %w", err)
+	}
+
+	elapsed := time.Since(start)
+	sec := output.NewSection(w, "Docs Generate", elapsed, color)
+	output.RowStatus(sec, "cli-reference.md", "generated", "success", color)
+	output.RowStatus(sec, "config-reference.md", "generated", "success", color)
+	sec.Close()
+
+	return nil
+}

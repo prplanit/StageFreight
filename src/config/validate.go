@@ -301,6 +301,11 @@ func validateNarratorItem(item NarratorItem, path string) []string {
 		if item.Spec == "" {
 			errs = append(errs, fmt.Sprintf("%s: kind component requires spec (component spec file path)", path))
 		}
+
+	case "include":
+		if item.Path == "" {
+			errs = append(errs, fmt.Sprintf("%s: kind include requires path (file path to include)", path))
+		}
 	}
 
 	return errs

@@ -20,7 +20,7 @@ type NarratorItem struct {
 	// ID is the item identifier (unique within file).
 	ID string `yaml:"id"`
 
-	// Kind is the item type: badge, shield, text, component, break.
+	// Kind is the item type: badge, shield, text, component, break, include.
 	Kind string `yaml:"kind"`
 
 	// Placement declares where this item goes in the target file.
@@ -63,6 +63,11 @@ type NarratorItem struct {
 
 	// Spec is the component spec file path (kind: component).
 	Spec string `yaml:"spec,omitempty"`
+
+	// ── kind: include ────────────────────────────────────────────────────
+
+	// Path is the file path to include verbatim (kind: include).
+	Path string `yaml:"path,omitempty"`
 }
 
 // HasGeneration returns true if this badge item should trigger SVG generation.
@@ -114,6 +119,7 @@ var validNarratorItemKinds = map[string]bool{
 	"text":      true,
 	"component": true,
 	"break":     true,
+	"include":   true,
 }
 
 // validPlacementModes enumerates all recognized placement modes.

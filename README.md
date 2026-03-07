@@ -17,9 +17,9 @@ A declarative CI/CD automation CLI that detects, builds, scans, and releases con
 | ------------------------------ | --------------------------------------------------------------------------------------------------------- |
 | **Detect → Plan → Build**      | Finds Dockerfiles, resolves tags from git, builds multi-platform images via `docker buildx`               |
 | **Multi-Registry Push**        | Docker Hub, GHCR, GitLab, Quay, Harbor, JFrog, Gitea — with branch/tag filtering via regex (`!` negation) |
-| **Security Scanning**          | Trivy vulnerability scan + Syft SBOM generation, configurable detail levels per branch or tag pattern      |
+| **Security Scanning**          | Trivy + Grype vulnerability scan, Syft SBOM generation, configurable detail levels per branch or tag      |
 | **Cross-Forge Releases**       | Create releases on GitLab, GitHub, or Gitea with auto-generated notes, badges, and cross-platform sync    |
-| **Cache-Aware Linting**        | 7 lint modules run in parallel, delta-only on changed files, with JUnit reporting for CI                  |
+| **Cache-Aware Linting**        | 9 lint modules run in parallel, delta-only on changed files, with JUnit reporting for CI                  |
 | **Retention Policies**         | Restic-style tag retention (keep_last, daily, weekly, monthly, yearly) across all registry providers       |
 | **Self-Building**              | StageFreight builds itself — this image is produced by `stagefreight docker build`                        |
 
@@ -34,7 +34,9 @@ A declarative CI/CD automation CLI that detects, builds, scans, and releases con
 
 |                     |                                                                 |
 | ------------------- | --------------------------------------------------------------- |
-| Manifest Examples   | [24 Example Configs](docs/config/README.md)                     |
+| CLI Reference       | [Full Command Reference](docs/reference/CLI.md)                |
+| Config Reference    | [Full Config Schema](docs/reference/Config.md)                 |
+| Manifest Examples   | [24 Example Configs](docs/config/README.md) · [Quick Examples](docs/examples/) |
 | Roadmap             | [Full Vision](docs/RoadMap.md)                                  |
 | GitLab CI Component | [Component Reference](docs/Component.md) · [Template](templates/stagefreight.yml) |
 
@@ -46,22 +48,28 @@ A declarative CI/CD automation CLI that detects, builds, scans, and releases con
 # .stagefreight.yml
 version: 1
 
-docker:
-  platforms: [linux/amd64]
-  registries:
-    - url: docker.io
-      path: yourorg/yourapp
-      tags: ["{version}", "latest"]
-      git_tags: ["^\\d+\\.\\d+\\.\\d+$"]
-      credentials: DOCKER
+builds:
+  - id: myapp
+    kind: docker
+    platforms: [linux/amd64]
+
+targets:
+  - id: dockerhub
+    kind: registry
+    build: myapp
+    url: docker.io
+    path: yourorg/yourapp
+    tags: ["{version}", "latest"]
+    when: { events: [tag] }
+    credentials: DOCKER
 ```
 
 ```yaml
 # .gitlab-ci.yml
 build-image:
-  image: docker.io/prplanit/stagefreight:latest
+  image: docker.io/prplanit/stagefreight:latest-dev
   services:
-    - docker:27-dind
+    - docker.io/library/docker:27-dind
   script:
     - stagefreight docker build
   rules:
@@ -72,8 +80,8 @@ build-image:
 # or run locally
 docker run --rm -v "$(pwd)":/src -w /src \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  docker.io/prplanit/stagefreight:latest \
-  stagefreight docker build --local
+  docker.io/prplanit/stagefreight:latest-dev \
+  sh -c 'git config --global --add safe.directory /src && stagefreight docker build --local'
 ```
 
 ---
@@ -81,28 +89,39 @@ docker run --rm -v "$(pwd)":/src -w /src \
 ## CLI Commands
 
 ```
-stagefreight docker build    # detect → plan → lint → build → push → retention
-stagefreight lint             # run lint modules on the working tree
-stagefreight security scan    # trivy scan + SBOM generation
-stagefreight release create   # create forge release with notes + sync
-stagefreight release notes    # generate release notes from git log
-stagefreight release badge    # generate/commit release status badge
-stagefreight version          # print version info
+stagefreight docker build       # detect → plan → lint → build → push → retention
+stagefreight docker readme      # sync README to container registries
+stagefreight lint                # run lint modules on the working tree
+stagefreight security scan      # trivy + grype scan + SBOM generation
+stagefreight release create     # create forge release with notes + sync
+stagefreight release notes      # generate release notes from git log
+stagefreight release badge      # generate/commit release status badge SVG
+stagefreight release prune      # prune old releases via retention policy
+stagefreight badge generate     # generate SVG badges from config
+stagefreight narrator run       # compose narrator items into target files
+stagefreight narrator compose   # ad-hoc CLI-driven composition
+stagefreight docs generate      # generate CLI + config reference docs
+stagefreight component docs     # generate component input documentation
+stagefreight dependency update  # update dependencies with freshness analysis
+stagefreight migrate            # migrate config to latest schema version
+stagefreight version            # print version info
 ```
+
+See [CLI Reference](docs/reference/CLI.md) for full flag documentation.
 
 ---
 
 ## Image Contents
 
-Based on **Alpine 3.22** with a statically compiled Go binary:
+Based on **Alpine 3.23** with a statically compiled Go binary:
 
 | Category | Tools |
 |----------|-------|
 | **CLI** | `stagefreight` (Go binary) |
 | **Container** | `docker-cli`, `docker-buildx` |
-| **Security** | `trivy`, `syft` |
+| **Security** | `trivy`, `syft`, `grype`, `osv-scanner` |
 | **SCM** | `git` |
-| **Utilities** | `tree` |
+| **Utilities** | `tree`, `chafa` |
 
 ### Looking for a minimal image?
 

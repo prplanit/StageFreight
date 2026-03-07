@@ -81,6 +81,7 @@ generate-docs:
     BUILD_DATE: "$CI_COMMIT_TIMESTAMP"
   script:
     - stagefreight badge generate
+    - stagefreight docs generate
     - stagefreight narrator run
     - stagefreight docker readme
     - stagefreight component docs --commit

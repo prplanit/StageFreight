@@ -154,7 +154,7 @@ func processNarratorFile(fileCfg config.NarratorFile, rootDir string, vi *gitver
 
 	for _, group := range groups {
 		// Build modules from items in this group.
-		modules := buildModulesV2(group.Items, linkBase, rawBase, vi)
+		modules := buildModulesV2(group.Items, linkBase, rawBase, vi, rootDir)
 		if len(modules) == 0 {
 			continue
 		}
@@ -232,7 +232,7 @@ func groupItemsByPlacement(items []config.NarratorItem) []placementGroup {
 
 // buildModulesV2 converts v2 NarratorItem entries into narrator.Module instances.
 // Dispatches on item.Kind instead of checking which field is set.
-func buildModulesV2(items []config.NarratorItem, linkBase, rawBase string, vi *gitver.VersionInfo) []narrator.Module {
+func buildModulesV2(items []config.NarratorItem, linkBase, rawBase string, vi *gitver.VersionInfo, rootDir string) []narrator.Module {
 	var modules []narrator.Module
 
 	for _, item := range items {
@@ -280,6 +280,18 @@ func buildModulesV2(items []config.NarratorItem, linkBase, rawBase string, vi *g
 			}
 			docs := component.GenerateDocs([]*component.SpecFile{spec})
 			modules = append(modules, narrator.ComponentModule{Docs: strings.TrimSpace(docs)})
+
+		case "include":
+			incPath := item.Path
+			if !filepath.IsAbs(incPath) {
+				incPath = filepath.Join(rootDir, incPath)
+			}
+			data, err := os.ReadFile(incPath)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "narrator: include %s: %v\n", item.Path, err)
+				continue
+			}
+			modules = append(modules, narrator.IncludeModule{Content: strings.TrimSpace(string(data))})
 		}
 	}
 

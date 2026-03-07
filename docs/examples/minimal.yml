@@ -1,0 +1,17 @@
+# Minimal StageFreight config — build + push to one registry.
+version: 1
+
+builds:
+  - id: myapp
+    kind: docker
+    platforms: [linux/amd64]
+
+targets:
+  - id: dockerhub
+    kind: registry
+    build: myapp
+    url: docker.io
+    path: myorg/myapp
+    tags: ["{version}", "latest"]
+    when: { events: [tag] }
+    credentials: DOCKER
