@@ -9,6 +9,7 @@
 A declarative CI/CD automation CLI that detects, builds, scans, and releases container images across forges and registries — from a single manifest. StageFreight is open-source, self-building, and replaces fragile shell-script CI pipelines with a single Go binary driven by one [`.stagefreight.yml`](.stagefreight.yml) file.
 
 <!-- sf:badges:start -->
+[![release](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/release.svg)](https://github.com/sofmeright/stagefreight/releases) [![build](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/build.svg)](https://github.com/sofmeright/stagefreight/actions) [![license](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/license.svg)](https://github.com/sofmeright/stagefreight/blob/main/LICENSE) ![updated](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/updated.svg) [![docker/pulls/prplanit/stagefreight](https://img.shields.io/docker/pulls/prplanit/stagefreight)](https://hub.docker.com/r/prplanit/stagefreight)
 <!-- sf:badges:end -->
 
 ### Features:
