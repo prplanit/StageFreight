@@ -190,6 +190,11 @@ narrator:
           between: ["<!-- sf:config-reference:start -->", "<!-- sf:config-reference:end -->"]
           mode: replace
 
+commit:
+  default_type: docs
+  conventional: true
+  backend: git
+
 lint:
   level: full
   exclude:
