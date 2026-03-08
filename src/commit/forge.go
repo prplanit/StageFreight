@@ -92,19 +92,13 @@ func (f *ForgeBackend) Execute(ctx context.Context, plan *Plan, conventional boo
 		return nil, fmt.Errorf("forge commit: %w", err)
 	}
 
-	shaShort := commitResult.SHA
-	if len(shaShort) > 12 {
-		shaShort = shaShort[:12]
-	}
-	fmt.Fprintf(os.Stderr, "commit: created remote commit %s via %s API\n",
-		shaShort, f.ForgeClient.Provider())
-
 	// 6. Return result with real remote SHA
 	return &Result{
 		SHA:     commitResult.SHA,
 		Message: plan.Message(conventional),
 		Files:   fileNames,
 		Pushed:  true,
+		Backend: fmt.Sprintf("forge (%s)", f.ForgeClient.Provider()),
 	}, nil
 }
 

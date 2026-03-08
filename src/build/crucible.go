@@ -11,6 +11,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/sofmeright/stagefreight/src/diag"
 )
 
 // Crucible environment variables.
@@ -171,9 +173,7 @@ func RunCrucible(ctx context.Context, opts CrucibleOpts) (*CrucibleResult, error
 	)
 	args = append(args, "sh", "-c", shellCmd)
 
-	if opts.Verbose {
-		fmt.Fprintf(os.Stderr, "exec: docker %s\n", strings.Join(args, " "))
-	}
+	diag.Debug(opts.Verbose, "exec: docker %s", strings.Join(args, " "))
 
 	cmd := exec.CommandContext(ctx, "docker", args...)
 	cmd.Stdout = os.Stdout

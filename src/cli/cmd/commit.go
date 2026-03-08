@@ -133,11 +133,12 @@ func runCommit(cmd *cobra.Command, args []string) error {
 			if cfg.Commit.Backend == "forge" {
 				return fmt.Errorf("forge backend requested but detection failed: %w", err)
 			}
-			fmt.Fprintf(os.Stderr, "commit: forge detection failed: %s\n", err)
-			fmt.Fprintf(os.Stderr, "commit: falling back to git push\n")
+			if verbose {
+				fmt.Fprintf(os.Stderr, "commit: forge detection failed: %s\n", err)
+				fmt.Fprintf(os.Stderr, "commit: falling back to git push\n")
+			}
 			backend = &commit.GitBackend{RootDir: rootDir}
 		} else {
-			fmt.Fprintf(os.Stderr, "commit: using %s forge API for push to %s\n", fc.Provider(), branch)
 			backend = &commit.ForgeBackend{
 				RootDir:     rootDir,
 				ForgeClient: fc,
@@ -168,6 +169,10 @@ func runCommit(cmd *cobra.Command, args []string) error {
 		typeDisplay += "!"
 	}
 	sec.Row("%-16s%s", "type", typeDisplay)
+
+	if result.Backend != "" {
+		sec.Row("%-16s%s", "backend", result.Backend)
+	}
 
 	if result.NoOp {
 		sec.Row("%-16s%s", "status", "nothing to commit")

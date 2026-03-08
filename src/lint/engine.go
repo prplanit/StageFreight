@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sofmeright/stagefreight/src/config"
+	"github.com/sofmeright/stagefreight/src/diag"
 	"golang.org/x/sync/semaphore"
 )
 
@@ -214,8 +215,8 @@ func (e *Engine) RunWithStats(ctx context.Context, files []FileInfo) ([]Finding,
 					// Cache even empty results (clean pass).
 					// Skip write for modules that opted out (TTL<0).
 					if !noCache {
-						if cacheErr := e.Cache.Put(key, results); cacheErr != nil && e.Verbose {
-							fmt.Fprintf(os.Stderr, "cache: write failed for %s/%s: %v\n", m.Name(), f.Path, cacheErr)
+						if cacheErr := e.Cache.Put(key, results); cacheErr != nil {
+							diag.Debug(e.Verbose, "cache: write failed for %s/%s: %v", m.Name(), f.Path, cacheErr)
 						}
 					}
 					return

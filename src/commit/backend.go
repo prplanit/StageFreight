@@ -8,10 +8,12 @@ type Backend interface {
 }
 
 // Result holds the outcome of a commit execution.
+// All informational status must be represented here, not printed by backends.
 type Result struct {
 	SHA     string
 	Message string
 	Files   []string // actual staged files (from git diff --cached --name-only)
 	Pushed  bool
 	NoOp    bool
+	Backend string // stable descriptor: "git", "forge (gitlab)", "forge (github)", "dry-run"
 }

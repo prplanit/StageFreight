@@ -35,6 +35,7 @@ func (d *DryRunBackend) Execute(_ context.Context, plan *Plan, conventional bool
 		Message: plan.Message(conventional),
 		Files:   files,
 		NoOp:    len(files) == 0,
+		Backend: "dry-run",
 	}, nil
 }
 

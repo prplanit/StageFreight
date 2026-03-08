@@ -11,6 +11,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/utils/merkletrie"
+	"github.com/sofmeright/stagefreight/src/diag"
 )
 
 // Delta detects changed files relative to a baseline.
@@ -28,27 +29,21 @@ type Delta struct {
 func (d *Delta) ChangedFiles(ctx context.Context) (map[string]bool, error) {
 	repo, err := git.PlainOpen(d.RootDir)
 	if err != nil {
-		if d.Verbose {
-			fmt.Fprintf(os.Stderr, "delta: not a git repo, scanning all files\n")
-		}
+		diag.Debug(d.Verbose, "delta: not a git repo, scanning all files")
 		return nil, nil // not a git repo — full scan
 	}
 
 	// Collect changed paths from working tree (unstaged + staged)
 	worktreeChanges, err := d.worktreeChanges(repo)
 	if err != nil {
-		if d.Verbose {
-			fmt.Fprintf(os.Stderr, "delta: worktree diff failed: %v, scanning all files\n", err)
-		}
+		diag.Debug(d.Verbose, "delta: worktree diff failed: %v, scanning all files", err)
 		return nil, nil
 	}
 
 	// Collect changed paths relative to target branch
 	branchChanges, err := d.branchChanges(repo)
 	if err != nil {
-		if d.Verbose {
-			fmt.Fprintf(os.Stderr, "delta: branch diff failed: %v, scanning all files\n", err)
-		}
+		diag.Debug(d.Verbose, "delta: branch diff failed: %v, scanning all files", err)
 		return nil, nil
 	}
 
@@ -62,9 +57,7 @@ func (d *Delta) ChangedFiles(ctx context.Context) (map[string]bool, error) {
 	}
 
 	if len(changed) == 0 {
-		if d.Verbose {
-			fmt.Fprintf(os.Stderr, "delta: no changes detected\n")
-		}
+		diag.Debug(d.Verbose, "delta: no changes detected")
 	}
 
 	return changed, nil

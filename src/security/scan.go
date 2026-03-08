@@ -10,6 +10,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/sofmeright/stagefreight/src/diag"
 )
 
 // ScanConfig holds security scan configuration.
@@ -93,12 +95,12 @@ func Scan(ctx context.Context, cfg ScanConfig) (*ScanResult, error) {
 			grypeJSON := cfg.OutputDir + "/security-scan-grype.json"
 			if err := runGrype(ctx, cfg.ImageRef, "json", grypeJSON); err != nil {
 				// Non-fatal — log and continue with available results.
-				fmt.Fprintf(os.Stderr, "grype scan failed (continuing without Grype): %v\n", err)
+				diag.Warn("grype scan failed (continuing without Grype): %v", err)
 			} else {
 				result.Artifacts = append(result.Artifacts, grypeJSON)
 				grypeVulns, parseErr := parseGrypeVulnerabilities(grypeJSON)
 				if parseErr != nil {
-					fmt.Fprintf(os.Stderr, "grype parse failed (continuing without Grype): %v\n", parseErr)
+					diag.Warn("grype parse failed (continuing without Grype): %v", parseErr)
 				} else {
 					result.Vulnerabilities = append(result.Vulnerabilities, grypeVulns...)
 				}

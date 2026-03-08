@@ -68,6 +68,7 @@ func (g *GitBackend) Execute(_ context.Context, plan *Plan, conventional bool) (
 		SHA:     sha,
 		Message: plan.Message(conventional),
 		Files:   files,
+		Backend: "git",
 	}
 
 	// 7. Push

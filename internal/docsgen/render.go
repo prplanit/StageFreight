@@ -16,7 +16,8 @@ func anchor(prefix, name string) string {
 
 // anchorTag returns an HTML anchor element for deep linking.
 func anchorTag(prefix, name string) string {
-	return fmt.Sprintf(`<a id="%s"></a>`, anchor(prefix, name))
+	a := anchor(prefix, name)
+	return fmt.Sprintf(`<a id="%s" name="%s"></a>`, a, a)
 }
 
 // flagTable renders a markdown table for command flags.
