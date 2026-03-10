@@ -36,7 +36,7 @@
 
 ---
 
-<a id="cli-stagefreight"></a>
+<a id="cli-stagefreight" name="cli-stagefreight"></a>
 ### stagefreight
 
 **Usage:** `stagefreight stagefreight`
@@ -71,7 +71,7 @@ StageFreight — cache-aware, delta-only code quality and CI/CD automation.
 
 ---
 
-<a id="cli-stagefreight-badge"></a>
+<a id="cli-stagefreight-badge" name="cli-stagefreight-badge"></a>
 ### stagefreight badge
 
 **Usage:** `stagefreight badge badge`
@@ -93,7 +93,7 @@ Generate SVG badges from config or ad-hoc flags.
 
 ---
 
-<a id="cli-stagefreight-badge-generate"></a>
+<a id="cli-stagefreight-badge-generate" name="cli-stagefreight-badge-generate"></a>
 ### stagefreight badge generate
 
 **Usage:** `stagefreight badge generate [name...]`
@@ -124,7 +124,7 @@ Ad-hoc (--label + --value): generates a single badge from flags.
 
 ---
 
-<a id="cli-stagefreight-commit"></a>
+<a id="cli-stagefreight-commit" name="cli-stagefreight-commit"></a>
 ### stagefreight commit
 
 **Usage:** `stagefreight commit [summary]`
@@ -173,7 +173,7 @@ Examples:
 
 ---
 
-<a id="cli-stagefreight-completion"></a>
+<a id="cli-stagefreight-completion" name="cli-stagefreight-completion"></a>
 ### stagefreight completion
 
 **Usage:** `stagefreight completion completion`
@@ -200,7 +200,7 @@ See each sub-command's help for details on how to use the generated script.
 
 ---
 
-<a id="cli-stagefreight-completion-bash"></a>
+<a id="cli-stagefreight-completion-bash" name="cli-stagefreight-completion-bash"></a>
 ### stagefreight completion bash
 
 **Usage:** `stagefreight completion bash bash`
@@ -244,7 +244,7 @@ You will need to start a new shell for this setup to take effect.
 
 ---
 
-<a id="cli-stagefreight-completion-fish"></a>
+<a id="cli-stagefreight-completion-fish" name="cli-stagefreight-completion-fish"></a>
 ### stagefreight completion fish
 
 **Usage:** `stagefreight completion fish fish`
@@ -279,7 +279,7 @@ You will need to start a new shell for this setup to take effect.
 
 ---
 
-<a id="cli-stagefreight-completion-powershell"></a>
+<a id="cli-stagefreight-completion-powershell" name="cli-stagefreight-completion-powershell"></a>
 ### stagefreight completion powershell
 
 **Usage:** `stagefreight completion powershell powershell`
@@ -311,7 +311,7 @@ to your powershell profile.
 
 ---
 
-<a id="cli-stagefreight-completion-zsh"></a>
+<a id="cli-stagefreight-completion-zsh" name="cli-stagefreight-completion-zsh"></a>
 ### stagefreight completion zsh
 
 **Usage:** `stagefreight completion zsh zsh`
@@ -357,7 +357,7 @@ You will need to start a new shell for this setup to take effect.
 
 ---
 
-<a id="cli-stagefreight-component"></a>
+<a id="cli-stagefreight-component" name="cli-stagefreight-component"></a>
 ### stagefreight component
 
 **Usage:** `stagefreight component component`
@@ -379,7 +379,7 @@ Parse component specs, generate documentation, and manage component releases.
 
 ---
 
-<a id="cli-stagefreight-component-docs"></a>
+<a id="cli-stagefreight-component-docs" name="cli-stagefreight-component-docs"></a>
 ### stagefreight component docs
 
 **Usage:** `stagefreight component docs docs`
@@ -415,7 +415,7 @@ Output modes:
 
 ---
 
-<a id="cli-stagefreight-dependency"></a>
+<a id="cli-stagefreight-dependency" name="cli-stagefreight-dependency"></a>
 ### stagefreight dependency
 
 **Usage:** `stagefreight dependency dependency`
@@ -439,7 +439,7 @@ Resolve, update, and audit project dependencies.
 
 ---
 
-<a id="cli-stagefreight-dependency-update"></a>
+<a id="cli-stagefreight-dependency-update" name="cli-stagefreight-dependency-update"></a>
 ### stagefreight dependency update
 
 **Usage:** `stagefreight dependency update [path]`
@@ -472,7 +472,7 @@ Use --dry-run to resolve and report without applying changes.
 
 ---
 
-<a id="cli-stagefreight-docker"></a>
+<a id="cli-stagefreight-docker" name="cli-stagefreight-docker"></a>
 ### stagefreight docker
 
 **Usage:** `stagefreight docker docker`
@@ -495,7 +495,7 @@ Build, push, and manage container images.
 
 ---
 
-<a id="cli-stagefreight-docker-build"></a>
+<a id="cli-stagefreight-docker-build" name="cli-stagefreight-docker-build"></a>
 ### stagefreight docker build
 
 **Usage:** `stagefreight docker build build`
@@ -529,7 +529,7 @@ Runs lint as a pre-build gate unless --skip-lint is set.
 
 ---
 
-<a id="cli-stagefreight-docker-readme"></a>
+<a id="cli-stagefreight-docker-readme" name="cli-stagefreight-docker-readme"></a>
 ### stagefreight docker readme
 
 **Usage:** `stagefreight docker readme readme`
@@ -557,7 +557,7 @@ Other registries are silently skipped.
 
 ---
 
-<a id="cli-stagefreight-docs"></a>
+<a id="cli-stagefreight-docs" name="cli-stagefreight-docs"></a>
 ### stagefreight docs
 
 **Usage:** `stagefreight docs docs`
@@ -579,7 +579,7 @@ Generate reference documentation from code and config structs.
 
 ---
 
-<a id="cli-stagefreight-docs-generate"></a>
+<a id="cli-stagefreight-docs-generate" name="cli-stagefreight-docs-generate"></a>
 ### stagefreight docs generate
 
 **Usage:** `stagefreight docs generate generate`
@@ -611,7 +611,7 @@ Generated files:
 
 ---
 
-<a id="cli-stagefreight-help"></a>
+<a id="cli-stagefreight-help" name="cli-stagefreight-help"></a>
 ### stagefreight help
 
 **Usage:** `stagefreight help [command]`
@@ -630,7 +630,7 @@ Simply type stagefreight help [path to command] for full details.
 
 ---
 
-<a id="cli-stagefreight-lint"></a>
+<a id="cli-stagefreight-lint" name="cli-stagefreight-lint"></a>
 ### stagefreight lint
 
 **Usage:** `stagefreight lint [paths...]`
@@ -663,7 +663,7 @@ Modules run in parallel and results are cached by content hash.
 
 ---
 
-<a id="cli-stagefreight-migrate"></a>
+<a id="cli-stagefreight-migrate" name="cli-stagefreight-migrate"></a>
 ### stagefreight migrate
 
 **Usage:** `stagefreight migrate [file]`
@@ -697,7 +697,7 @@ by this migration tool — it was an unversioned alpha that must be rewritten.
 
 ---
 
-<a id="cli-stagefreight-narrator"></a>
+<a id="cli-stagefreight-narrator" name="cli-stagefreight-narrator"></a>
 ### stagefreight narrator
 
 **Usage:** `stagefreight narrator narrator`
@@ -724,7 +724,7 @@ Everything outside markers is never touched.
 
 ---
 
-<a id="cli-stagefreight-narrator-compose"></a>
+<a id="cli-stagefreight-narrator-compose" name="cli-stagefreight-narrator-compose"></a>
 ### stagefreight narrator compose
 
 **Usage:** `stagefreight narrator compose [items...]`
@@ -772,7 +772,7 @@ Examples:
 
 ---
 
-<a id="cli-stagefreight-narrator-run"></a>
+<a id="cli-stagefreight-narrator-run" name="cli-stagefreight-narrator-run"></a>
 ### stagefreight narrator run
 
 **Usage:** `stagefreight narrator run run`
@@ -803,7 +803,7 @@ inline items are joined with spaces, block items with newlines.
 
 ---
 
-<a id="cli-stagefreight-release"></a>
+<a id="cli-stagefreight-release" name="cli-stagefreight-release"></a>
 ### stagefreight release
 
 **Usage:** `stagefreight release release`
@@ -827,7 +827,7 @@ Create releases, generate notes, update badges, and sync across forges.
 
 ---
 
-<a id="cli-stagefreight-release-create"></a>
+<a id="cli-stagefreight-release-create" name="cli-stagefreight-release-create"></a>
 ### stagefreight release create
 
 **Usage:** `stagefreight release create create`
@@ -865,7 +865,7 @@ unless --skip-sync is set.
 
 ---
 
-<a id="cli-stagefreight-release-notes"></a>
+<a id="cli-stagefreight-release-notes" name="cli-stagefreight-release-notes"></a>
 ### stagefreight release notes
 
 **Usage:** `stagefreight release notes notes`
@@ -898,7 +898,7 @@ If --to is omitted, defaults to HEAD.
 
 ---
 
-<a id="cli-stagefreight-release-prune"></a>
+<a id="cli-stagefreight-release-prune" name="cli-stagefreight-release-prune"></a>
 ### stagefreight release prune
 
 **Usage:** `stagefreight release prune prune`
@@ -928,7 +928,7 @@ Use --dry-run to preview what would be deleted without deleting.
 
 ---
 
-<a id="cli-stagefreight-security"></a>
+<a id="cli-stagefreight-security" name="cli-stagefreight-security"></a>
 ### stagefreight security
 
 **Usage:** `stagefreight security security`
@@ -950,7 +950,7 @@ Vulnerability scanning, SBOM generation, and security attestation.
 
 ---
 
-<a id="cli-stagefreight-security-scan"></a>
+<a id="cli-stagefreight-security-scan" name="cli-stagefreight-security-scan"></a>
 ### stagefreight security scan
 
 **Usage:** `stagefreight security scan scan`
@@ -985,7 +985,7 @@ in release notes.
 
 ---
 
-<a id="cli-stagefreight-version"></a>
+<a id="cli-stagefreight-version" name="cli-stagefreight-version"></a>
 ### stagefreight version
 
 **Usage:** `stagefreight version version`

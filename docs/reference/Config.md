@@ -33,7 +33,7 @@ Generated sections below are assembled from `docs/modules/config-reference.md` v
 
 ---
 
-<a id="config-version"></a>
+<a id="config-version" name="config-version"></a>
 ### version
 
 Schema version number. Must be `1` — the first stable schema.
@@ -50,7 +50,7 @@ version: 1
 
 ---
 
-<a id="config-vars"></a>
+<a id="config-vars" name="config-vars"></a>
 ### vars
 
 User-defined template variable dictionary. Referenced as `{var:name}` anywhere templates are resolved.
@@ -69,12 +69,12 @@ vars:
 
 ---
 
-<a id="config-defaults"></a>
+<a id="config-defaults" name="config-defaults"></a>
 ### defaults
 
 ---
 
-<a id="config-sources"></a>
+<a id="config-sources" name="config-sources"></a>
 ### sources
 
 Build source configuration. Defines where source code lives and how to derive link/raw URLs.
@@ -99,7 +99,7 @@ sources:
 
 ---
 
-<a id="config-policies"></a>
+<a id="config-policies" name="config-policies"></a>
 ### policies
 
 Named regex patterns for git tag and branch matching. Referenced by target `when` conditions (e.g., `git_tags: [stable]`).
@@ -122,7 +122,7 @@ policies:
 
 ---
 
-<a id="config-builds"></a>
+<a id="config-builds" name="config-builds"></a>
 ### builds
 
 Named build artifacts. Each build has a unique ID referenced by targets. Currently supports `kind: docker`.
@@ -162,7 +162,7 @@ builds:
 
 ---
 
-<a id="config-targets"></a>
+<a id="config-targets" name="config-targets"></a>
 ### targets
 
 Distribution targets and side-effects. Each target has a `kind` that determines its behavior: push images, sync READMEs, publish components, or create releases.
@@ -222,7 +222,7 @@ targets:
 
 ---
 
-<a id="config-narrator"></a>
+<a id="config-narrator" name="config-narrator"></a>
 ### narrator
 
 Content composition for file targets. Composes badges, shields, text, includes, and components into managed `<!-- sf:markers -->` sections in any file.
@@ -274,7 +274,7 @@ narrator:
 
 ---
 
-<a id="config-lint"></a>
+<a id="config-lint" name="config-lint"></a>
 ### lint
 
 Linting configuration. Controls scan mode, module toggles, and per-module options. 9 modules: tabs, secrets, conflicts, filesize, linecount, unicode, yaml, lineendings, freshness.
@@ -305,7 +305,7 @@ lint:
 
 ---
 
-<a id="config-security"></a>
+<a id="config-security" name="config-security"></a>
 ### security
 
 Security scanning configuration. Controls vulnerability scanning (Trivy, Grype), SBOM generation (Syft), and how security info appears in release notes.
@@ -343,7 +343,7 @@ security:
 
 ---
 
-<a id="config-commit"></a>
+<a id="config-commit" name="config-commit"></a>
 ### commit
 
 Commit subsystem configuration. Controls conventional commit formatting, type registry, and default behavior for `stagefreight commit`.
