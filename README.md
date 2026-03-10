@@ -157,4 +157,4 @@ Any resemblance to working software is entirely intentional but not guaranteed. 
 
 ## License
 
-Distributed under the [AGPL-3.0-only](LICENSE) License.
+Distributed under the [AGPL-3.0-only](LICENSE) License. See [LICENSING.md](docs/LICENSING.md) for commercial licensing.
