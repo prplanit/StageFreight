@@ -65,50 +65,63 @@ func Apply(ctx context.Context, store Store, patterns []string, policy config.Re
 	}
 
 	// Filter items that match the pattern set
-	var candidates []Item
+	var allMatched []Item
 	for _, item := range items {
 		if config.MatchPatterns(patterns, item.Name) {
-			candidates = append(candidates, item)
+			allMatched = append(allMatched, item)
 		}
 	}
 
-	result.Matched = len(candidates)
+	result.Matched = len(allMatched)
 
-	if len(candidates) == 0 {
+	if len(allMatched) == 0 {
 		return result, nil
 	}
 
 	// Sort by CreatedAt descending (newest first)
-	sort.Slice(candidates, func(i, j int) bool {
-		return candidates[i].CreatedAt.After(candidates[j].CreatedAt)
+	sort.Slice(allMatched, func(i, j int) bool {
+		return allMatched[i].CreatedAt.After(allMatched[j].CreatedAt)
 	})
 
-	// Apply retention policies — mark which items to keep
+	// Separate protected items from retention candidates so they do not
+	// consume keep_last or time-bucket slots. Protected items are always
+	// kept; retention policies apply only to the remaining candidates.
+	protectPatterns := TemplatesToPatterns(policy.Protect)
+	isProtected := make([]bool, len(allMatched))
+	var candidates []Item
+	for i, item := range allMatched {
+		if len(protectPatterns) > 0 && config.MatchPatterns(protectPatterns, item.Name) {
+			isProtected[i] = true
+		} else {
+			candidates = append(candidates, item)
+		}
+	}
+
+	// Apply retention policies only to non-protected candidates.
 	keepSet := ApplyPolicies(candidates, policy)
 
-	// Protect is a deletion veto, not a retention policy. After the retention
-	// policies have marked keep/delete candidates, force-keep anything matching
-	// a protect pattern. Values are run through TemplatesToPatterns so plain
-	// values like "latest-dev" become anchored regexes (^latest-dev$).
-	protectPatterns := TemplatesToPatterns(policy.Protect)
-	if len(protectPatterns) > 0 {
-		for i, item := range candidates {
-			if !keepSet[i] && config.MatchPatterns(protectPatterns, item.Name) {
-				keepSet[i] = true
-			}
+	// Merge back: protected items are always kept, non-protected follow keepSet.
+	keepAll := make([]bool, len(allMatched))
+	ci := 0
+	for i := range allMatched {
+		if isProtected[i] {
+			keepAll[i] = true
+		} else {
+			keepAll[i] = keepSet[ci]
+			ci++
 		}
 	}
 
 	// Count kept
-	for _, keep := range keepSet {
+	for _, keep := range keepAll {
 		if keep {
 			result.Kept++
 		}
 	}
 
 	// Delete items not in the keep set
-	for i, item := range candidates {
-		if keepSet[i] {
+	for i, item := range allMatched {
+		if keepAll[i] {
 			continue
 		}
 		if err := store.Delete(ctx, item.Name); err != nil {
