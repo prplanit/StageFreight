@@ -79,7 +79,7 @@ narrator:
         kind: props
         type: go-report-card
         params:
-          module: github.com/sofmeright/stagefreight
+          module: github.com/prplanit/stagefreight
 
       - id: prop.ci
         kind: props
@@ -162,7 +162,7 @@ Resolve a prop and print the resulting markdown:
 
 ```
 stagefreight props render --type docker-pulls --param image=prplanit/stagefreight
-stagefreight props render --type go-report-card --param module=github.com/sofmeright/stagefreight
+stagefreight props render --type go-report-card --param module=github.com/prplanit/stagefreight
 stagefreight props render --type slsa --param level=3
 ```
 
@@ -182,7 +182,7 @@ Fixed image URLs with no dynamic provider params (e.g., SLSA level badge, conven
 | Param | Convention | Example |
 |-------|-----------|---------|
 | `repo` | `owner/name` (no host prefix) | `prplanit/stagefreight` |
-| `module` | Full Go module path | `github.com/sofmeright/stagefreight` |
+| `module` | Full Go module path | `github.com/prplanit/stagefreight` |
 | `image` | Docker Hub `org/name` (no registry prefix) | `prplanit/stagefreight` |
 | `branch` | Defaults to empty (provider default) | `main` |
 

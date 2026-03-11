@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sofmeright/stagefreight/src/lint"
+	"github.com/prplanit/stagefreight/src/lint"
 
 	toml "github.com/pelletier/go-toml/v2"
 )

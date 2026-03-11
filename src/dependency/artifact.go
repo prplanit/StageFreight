@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sofmeright/stagefreight/src/lint/modules/freshness"
-	"github.com/sofmeright/stagefreight/src/version"
+	"github.com/prplanit/stagefreight/src/lint/modules/freshness"
+	"github.com/prplanit/stagefreight/src/version"
 )
 
 // resolveJSON is the top-level structure for resolve.json (schemaVersion 1).

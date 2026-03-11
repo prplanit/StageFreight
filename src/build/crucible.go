@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sofmeright/stagefreight/src/diag"
+	"github.com/prplanit/stagefreight/src/diag"
 )
 
 // Crucible environment variables.
@@ -27,7 +27,7 @@ const (
 	CrucibleAllowEnvVar = "STAGEFREIGHT_ALLOW_CRUCIBLE"
 
 	// StageFreightModule is the canonical Go module path used by the repo guard.
-	StageFreightModule = "github.com/sofmeright/stagefreight"
+	StageFreightModule = "github.com/prplanit/stagefreight"
 )
 
 // Trust levels, ordered from weakest to strongest.

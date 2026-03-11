@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/zricethezav/gitleaks/v8/detect"
-	"github.com/sofmeright/stagefreight/src/lint"
+	"github.com/prplanit/stagefreight/src/lint"
 )
 
 func init() {

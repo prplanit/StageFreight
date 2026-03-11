@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/sofmeright/stagefreight/src/lint/modules/freshness"
+	"github.com/prplanit/stagefreight/src/lint/modules/freshness"
 )
 
 // Dockerfile regexes: capture prefix/token/suffix groups for minimal diffs.

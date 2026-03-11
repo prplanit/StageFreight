@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sofmeright/stagefreight/src/config"
+	"github.com/prplanit/stagefreight/src/config"
 )
 
 // memStore is an in-memory Store for testing.

@@ -22,11 +22,11 @@ func TestResolvedRegistryTargetURLs(t *testing.T) {
 			"docker.io/prplanit/stagefreight",
 		},
 		{
-			"ghcr", "github", "ghcr.io", "sofmeright/stagefreight", "1.0.0",
+			"ghcr", "github", "ghcr.io", "prplanit/stagefreight", "1.0.0",
 			"GitHub Container Registry",
-			"https://github.com/sofmeright/packages/container/package/stagefreight",
-			"https://github.com/sofmeright/packages/container/package/stagefreight",
-			"ghcr.io/sofmeright/stagefreight",
+			"https://github.com/prplanit/packages/container/package/stagefreight",
+			"https://github.com/prplanit/packages/container/package/stagefreight",
+			"ghcr.io/prplanit/stagefreight",
 		},
 		{
 			"quay", "quay", "quay.io", "prplanit/stagefreight", "1.0.0",

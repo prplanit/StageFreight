@@ -2,7 +2,7 @@ version: 1
 
 vars:
   org: prplanit
-  github_org: sofmeright
+  github_org: prplanit
   repo: stagefreight
 
 sources:

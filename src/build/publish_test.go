@@ -12,7 +12,7 @@ func TestPublishManifestRoundTrip(t *testing.T) {
 	manifest := PublishManifest{
 		Published: []PublishedImage{
 			{Host: "docker.io", Path: "prplanit/stagefreight", Tag: "1.0.0", Provider: "docker", Digest: "sha256:abc123"},
-			{Host: "ghcr.io", Path: "sofmeright/stagefreight", Tag: "1.0.0", Provider: "github"},
+			{Host: "ghcr.io", Path: "prplanit/stagefreight", Tag: "1.0.0", Provider: "github"},
 		},
 	}
 

@@ -10,7 +10,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/sofmeright/stagefreight/src/config"
+	"github.com/prplanit/stagefreight/src/config"
 )
 
 // Item is a named, timestamped entity that can be pruned (tag, release, etc).

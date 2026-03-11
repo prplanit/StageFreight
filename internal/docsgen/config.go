@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/sofmeright/stagefreight/src/config"
+	"github.com/prplanit/stagefreight/src/config"
 )
 
 // GenerateConfigReference emits a complete config reference markdown document.
@@ -100,7 +100,7 @@ func getFieldOverride(key string) FieldOverride {
 // isFirstPartyConfig returns true if t is a struct defined in the stagefreight config package.
 func isFirstPartyConfig(t reflect.Type) bool {
 	return t.Kind() == reflect.Struct &&
-		t.PkgPath() == "github.com/sofmeright/stagefreight/src/config"
+		t.PkgPath() == "github.com/prplanit/stagefreight/src/config"
 }
 
 // discoverSections walks the config.Config struct via reflection to discover

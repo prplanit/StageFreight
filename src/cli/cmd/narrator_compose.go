@@ -7,11 +7,11 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/sofmeright/stagefreight/src/build"
-	"github.com/sofmeright/stagefreight/src/config"
-	"github.com/sofmeright/stagefreight/src/gitver"
-	"github.com/sofmeright/stagefreight/src/narrator"
-	"github.com/sofmeright/stagefreight/src/registry"
+	"github.com/prplanit/stagefreight/src/build"
+	"github.com/prplanit/stagefreight/src/config"
+	"github.com/prplanit/stagefreight/src/gitver"
+	"github.com/prplanit/stagefreight/src/narrator"
+	"github.com/prplanit/stagefreight/src/registry"
 )
 
 var (

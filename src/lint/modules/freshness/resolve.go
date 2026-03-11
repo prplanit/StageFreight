@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/sofmeright/stagefreight/src/lint"
+	"github.com/prplanit/stagefreight/src/lint"
 )
 
 // ResolveDeps runs the full dependency resolution pipeline across all files

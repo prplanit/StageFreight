@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sofmeright/stagefreight/src/build"
+	"github.com/prplanit/stagefreight/src/build"
 )
 
 func TestDiscoverArtifactsSBOM(t *testing.T) {

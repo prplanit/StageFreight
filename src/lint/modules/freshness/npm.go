@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sofmeright/stagefreight/src/lint"
+	"github.com/prplanit/stagefreight/src/lint"
 )
 
 // npmRegistryResponse matches the npm registry abbreviated response.

@@ -1,5 +1,5 @@
 - Repository Information:
-  - Git repository: https://gitlab.prplanit.com/sofmeright/stagefreight
+  - Git repository: https://gitlab.prplanit.com/precisionplanit/stagefreight
   - **Git Commits**: Only sign commits as sofmeright@gmail.com / SoFMeRight. No anthropic attribution comments in commits.
 
 - CRITICAL RULES:

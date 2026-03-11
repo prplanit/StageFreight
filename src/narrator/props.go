@@ -1,6 +1,6 @@
 package narrator
 
-import "github.com/sofmeright/stagefreight/src/props"
+import "github.com/prplanit/stagefreight/src/props"
 
 // PropsModule renders a resolved prop through the shared FormatMarkdown path.
 // The prop is resolved before this module is created.

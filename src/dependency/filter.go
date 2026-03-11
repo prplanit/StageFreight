@@ -3,7 +3,7 @@ package dependency
 import (
 	"strings"
 
-	"github.com/sofmeright/stagefreight/src/lint/modules/freshness"
+	"github.com/prplanit/stagefreight/src/lint/modules/freshness"
 )
 
 // SkippedDep records a dependency that was not updated, with a reason.

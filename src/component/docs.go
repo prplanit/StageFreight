@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sofmeright/stagefreight/src/registry"
+	"github.com/prplanit/stagefreight/src/registry"
 )
 
 // inputGroup is an ordered grouping of inputs for rendering.

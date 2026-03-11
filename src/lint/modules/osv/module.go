@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sofmeright/stagefreight/src/lint"
+	"github.com/prplanit/stagefreight/src/lint"
 )
 
 // lockfiles maps base filenames to whether osv-scanner supports them.

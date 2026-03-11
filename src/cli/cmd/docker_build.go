@@ -13,16 +13,16 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/sofmeright/stagefreight/src/badge"
-	"github.com/sofmeright/stagefreight/src/build"
-	"github.com/sofmeright/stagefreight/src/build/engines"
-	"github.com/sofmeright/stagefreight/src/config"
-	"github.com/sofmeright/stagefreight/src/gitver"
-	"github.com/sofmeright/stagefreight/src/lint"
-	"github.com/sofmeright/stagefreight/src/lint/modules"
-	"github.com/sofmeright/stagefreight/src/output"
-	"github.com/sofmeright/stagefreight/src/registry"
-	"github.com/sofmeright/stagefreight/src/version"
+	"github.com/prplanit/stagefreight/src/badge"
+	"github.com/prplanit/stagefreight/src/build"
+	"github.com/prplanit/stagefreight/src/build/engines"
+	"github.com/prplanit/stagefreight/src/config"
+	"github.com/prplanit/stagefreight/src/gitver"
+	"github.com/prplanit/stagefreight/src/lint"
+	"github.com/prplanit/stagefreight/src/lint/modules"
+	"github.com/prplanit/stagefreight/src/output"
+	"github.com/prplanit/stagefreight/src/registry"
+	"github.com/prplanit/stagefreight/src/version"
 )
 
 var (

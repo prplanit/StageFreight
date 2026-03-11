@@ -5,7 +5,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/sofmeright/stagefreight/src/lint"
+	"github.com/prplanit/stagefreight/src/lint"
 )
 
 func init() {

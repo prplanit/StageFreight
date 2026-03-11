@@ -265,7 +265,7 @@ Each CI job can be migrated independently. Replace the `release_notes` job first
 
 # After: one step
 - name: Build
-  uses: sofmeright/stagefreight-action@v1
+  uses: prplanit/stagefreight-action@v1
   # reads .stagefreight.yml, does the right thing
 ```
 
@@ -335,7 +335,7 @@ metadata:
   motto: "Hello World's a Stage"              # slogan/tagline (optional)
   license: AGPL-3.0-only                      # SPDX identifier
   homepage: https://stagefreight.dev          # project URL
-  repository: https://github.com/sofmeright/stagefreight
+  repository: https://github.com/prplanit/stagefreight
   author: "SoFMeRight <sofmeright@gmail.com>"
 
   # Version source — where the version number comes from
@@ -350,7 +350,7 @@ metadata:
   stamp:
     # Go: injects via -ldflags at build time (no file modification needed)
     - type: go
-      package: github.com/sofmeright/stagefreight/src/version
+      package: github.com/prplanit/stagefreight/src/version
       vars:
         Version: "{version}"
         Description: "{description}"
@@ -1227,7 +1227,7 @@ docker:
       credentials: DOCKERHUB_TOKEN
 
     - url: ghcr.io
-      path: sofmeright/stagefreight
+      path: prplanit/stagefreight
       tags:
         - "{version}"
         - latest
@@ -1235,7 +1235,7 @@ docker:
       credentials: GITHUB_TOKEN
 
     - url: lscr.io
-      path: sofmeright/stagefreight
+      path: prplanit/stagefreight
       tags:
         - "{version}-ls{build}"     # LinuxServer.io convention
         - latest
@@ -2194,7 +2194,7 @@ After OIDC SSO login (or other auth method), the authorized user sees everything
 │  ── Action Details ──────────────────────────     │
 │                                                  │
 │  Action:  docker push (3 registries)             │
-│  Repo:    sofmeright/stagefreight       │
+│  Repo:    prplanit/stagefreight       │
 │  Branch:  main                                   │
 │  Commit:  abc1234 — "add multi-arch build"       │
 │  Trigger: yolo mode — auto-push after merge      │
@@ -2202,7 +2202,7 @@ After OIDC SSO login (or other auth method), the authorized user sees everything
 │  Tags to push:                                   │
 │    docker.io/prplanit/stagefreight:1.2.3         │
 │    docker.io/prplanit/stagefreight:latest        │
-│    ghcr.io/sofmeright/stagefreight:1.2.3         │
+│    ghcr.io/prplanit/stagefreight:1.2.3         │
 │                                                  │
 │  Lint:  ✓ passed (0.3s)                          │
 │  Test:  ✓ 12 passed (8.1s)                       │
@@ -2275,7 +2275,7 @@ Every approval decision is recorded as a structured audit event:
 {
   "id": "approve-abc123",
   "action": "docker-push",
-  "repo": "sofmeright/stagefreight",
+  "repo": "prplanit/stagefreight",
   "branch": "main",
   "commit": "abc1234",
   "requested_at": "2026-02-22T14:30:00Z",
@@ -2291,7 +2291,7 @@ Every approval decision is recorded as a structured audit event:
   "expires_at": "2026-02-22T15:00:00Z",
   "artifacts": [
     "docker.io/prplanit/stagefreight:1.2.3",
-    "ghcr.io/sofmeright/stagefreight:1.2.3"
+    "ghcr.io/prplanit/stagefreight:1.2.3"
   ]
 }
 ```
@@ -2426,7 +2426,7 @@ Every log event carries structured context fields that identify the operation, n
   "msg": "image pushed",
   "component": "build.image",
   "step": "push",
-  "repo": "sofmeright/stagefreight",
+  "repo": "prplanit/stagefreight",
   "branch": "main",
   "commit": "abc1234",
   "registry": "docker.io",

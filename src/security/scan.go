@@ -11,7 +11,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/sofmeright/stagefreight/src/diag"
+	"github.com/prplanit/stagefreight/src/diag"
 )
 
 // ScanConfig holds security scan configuration.

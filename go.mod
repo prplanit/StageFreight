@@ -1,4 +1,4 @@
-module github.com/sofmeright/stagefreight
+module github.com/prplanit/stagefreight
 
 go 1.25.4
 

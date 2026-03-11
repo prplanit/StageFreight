@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"github.com/sofmeright/stagefreight/src/release"
+	"github.com/prplanit/stagefreight/src/release"
 )
 
 var (

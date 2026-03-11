@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sofmeright/stagefreight/src/lint"
+	"github.com/prplanit/stagefreight/src/lint"
 )
 
 // goProxyLatest is the JSON response from proxy.golang.org/{mod}/@latest.

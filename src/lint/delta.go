@@ -11,7 +11,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/utils/merkletrie"
-	"github.com/sofmeright/stagefreight/src/diag"
+	"github.com/prplanit/stagefreight/src/diag"
 )
 
 // Delta detects changed files relative to a baseline.

@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/sofmeright/stagefreight/src/props"
+	"github.com/prplanit/stagefreight/src/props"
 )
 
 var propsCategoriesCmd = &cobra.Command{

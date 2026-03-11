@@ -1,6 +1,6 @@
 package build
 
-import "github.com/sofmeright/stagefreight/src/gitver"
+import "github.com/prplanit/stagefreight/src/gitver"
 
 // ResolveTemplate delegates to the gitver package.
 func ResolveTemplate(tmpl string, v *gitver.VersionInfo) string {

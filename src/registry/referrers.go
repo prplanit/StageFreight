@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/sofmeright/stagefreight/src/build"
+	"github.com/prplanit/stagefreight/src/build"
 )
 
 // ArtifactLinks holds discovered OCI referrer artifact links for an image.

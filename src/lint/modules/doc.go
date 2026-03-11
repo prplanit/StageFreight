@@ -4,7 +4,7 @@ package modules
 
 import (
 	// Register the freshness sub-package module.
-	_ "github.com/sofmeright/stagefreight/src/lint/modules/freshness"
+	_ "github.com/prplanit/stagefreight/src/lint/modules/freshness"
 	// Register the osv sub-package module.
-	_ "github.com/sofmeright/stagefreight/src/lint/modules/osv"
+	_ "github.com/prplanit/stagefreight/src/lint/modules/osv"
 )
