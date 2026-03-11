@@ -300,14 +300,19 @@ func buildModulesV2(items []config.NarratorItem, linkBase, rawBase string, vi *g
 				fmt.Fprintf(os.Stderr, "narrator: props type %q not found\n", item.Type)
 				continue
 			}
+			// Resolve {var:...} templates in params values.
+			resolvedParams := make(map[string]string, len(item.Params))
+			for k, v := range item.Params {
+				resolvedParams[k] = gitver.ResolveVars(v, cfg.Vars)
+			}
 			opts := props.RenderOptions{
 				Label:   item.Label,
-				Link:    item.Link,
+				Link:    gitver.ResolveVars(item.Link, cfg.Vars),
 				Style:   item.Style,
 				Logo:    item.Logo,
 				Variant: props.VariantClassic,
 			}
-			resolved, err := props.ResolveDefinition(def, item.Params, opts)
+			resolved, err := props.ResolveDefinition(def, resolvedParams, opts)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "narrator: props %s: %v\n", item.Type, err)
 				continue
