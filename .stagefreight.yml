@@ -125,7 +125,7 @@ narrator:
         color: auto
         font: monofur
         output: ".stagefreight/badges/build.svg"
-        link: "https://github.com/{var:github_org}/{var:repo}/actions"
+        link: "https://gitlab.prplanit.com/precisionplanit/{var:repo}/-/pipelines"
 
       - id: badge.license
         kind: badge
@@ -162,53 +162,78 @@ narrator:
         shield: "docker/pulls/{var:org}/{var:repo}"
         link: "https://hub.docker.com/r/{var:org}/{var:repo}"
 
-      # ── External ecosystem badges (props) ────────────────────────
-      - id: prop.go-report
+      # ── Project section (repo health & sources) ─────────────────
+      - id: project.github
+        kind: shield
+        placement:
+          between: ["<!-- sf:project:start -->", "<!-- sf:project:end -->"]
+          mode: replace
+          inline: true
+        shield: "badge/GitHub-source-181717?logo=github"
+        link: "https://github.com/{var:github_org}/{var:repo}"
+
+      - id: project.gitlab
+        kind: shield
+        placement:
+          between: ["<!-- sf:project:start -->", "<!-- sf:project:end -->"]
+          mode: replace
+          inline: true
+        shield: "badge/GitLab-source-FC6D26?logo=gitlab"
+        link: "https://gitlab.prplanit.com/precisionplanit/{var:repo}"
+
+      - id: project.go-report
         kind: props
         type: go-report-card
         placement:
-          between: ["<!-- sf:props:start -->", "<!-- sf:props:end -->"]
+          between: ["<!-- sf:project:start -->", "<!-- sf:project:end -->"]
           mode: replace
           inline: true
         params:
           module: "github.com/{var:github_org}/{var:repo}"
 
-      - id: prop.go-reference
+      - id: project.go-reference
         kind: props
         type: go-reference
         placement:
-          between: ["<!-- sf:props:start -->", "<!-- sf:props:end -->"]
+          between: ["<!-- sf:project:start -->", "<!-- sf:project:end -->"]
           mode: replace
           inline: true
         params:
           module: "github.com/{var:github_org}/{var:repo}"
 
-      - id: prop.github-release
+      - id: project.last-commit
         kind: props
-        type: github-release
+        type: github-last-commit
         placement:
-          between: ["<!-- sf:props:start -->", "<!-- sf:props:end -->"]
+          between: ["<!-- sf:project:start -->", "<!-- sf:project:end -->"]
           mode: replace
           inline: true
         params:
           repo: "{var:github_org}/{var:repo}"
-        style: flat-square
 
-      - id: prop.docker-size
+      - id: project.issues-open
         kind: props
-        type: docker-image-size
+        type: github-issues-open
         placement:
-          between: ["<!-- sf:props:start -->", "<!-- sf:props:end -->"]
+          between: ["<!-- sf:project:start -->", "<!-- sf:project:end -->"]
           mode: replace
           inline: true
         params:
-          image: "{var:org}/{var:repo}"
+          repo: "{var:github_org}/{var:repo}"
 
-      - id: prop.last-commit
-        kind: props
-        type: github-last-commit
+      - id: project.prs-open
+        kind: shield
         placement:
-          between: ["<!-- sf:props:start -->", "<!-- sf:props:end -->"]
+          between: ["<!-- sf:project:start -->", "<!-- sf:project:end -->"]
+          mode: replace
+          inline: true
+        shield: "github/issues-pr/{var:github_org}/{var:repo}"
+
+      - id: project.contributors
+        kind: props
+        type: github-contributors
+        placement:
+          between: ["<!-- sf:project:start -->", "<!-- sf:project:end -->"]
           mode: replace
           inline: true
         params:
@@ -248,6 +273,12 @@ narrator:
           mode: replace
         content: "**Latest Release:**"
 
+      - id: image.break-release
+        kind: break
+        placement:
+          between: ["<!-- sf:image:start -->", "<!-- sf:image:end -->"]
+          mode: replace
+
       - id: image.release-latest
         kind: badge
         placement:
@@ -265,7 +296,7 @@ narrator:
           between: ["<!-- sf:image:start -->", "<!-- sf:image:end -->"]
           mode: replace
         text: updated
-        value: "{docker.tag.v{version}.updated}"
+        value: "{docker.tag.v{base}.updated}"
         color: "#236144"
         output: ".stagefreight/badges/release-updated.svg"
 
@@ -275,10 +306,10 @@ narrator:
           between: ["<!-- sf:image:start -->", "<!-- sf:image:end -->"]
           mode: replace
         text: size
-        value: "{docker.tag.v{version}.size}"
+        value: "{docker.tag.v{base}.size}"
         color: "#555"
         output: ".stagefreight/badges/release-size.svg"
-        link: "https://hub.docker.com/r/{var:org}/{var:repo}/tags?name=v{version}"
+        link: "https://hub.docker.com/r/{var:org}/{var:repo}/tags?name=v{base}"
 
       - id: image.break2
         kind: break
@@ -293,6 +324,12 @@ narrator:
           between: ["<!-- sf:image:start -->", "<!-- sf:image:end -->"]
           mode: replace
         content: "**Latest Dev Build:**"
+
+      - id: image.break-dev
+        kind: break
+        placement:
+          between: ["<!-- sf:image:start -->", "<!-- sf:image:end -->"]
+          mode: replace
 
       - id: image.dev-latest
         kind: badge

@@ -1392,8 +1392,9 @@ func runBadgeSection(w io.Writer, color bool, rootDir string) (string, time.Dura
 
 		value := gitver.ResolveDockerTemplates(resolvedValues[i], dockerInfo)
 
-		// Guard against empty values producing broken badges
-		if value == "" {
+		// Guard against empty or unresolved template values producing broken badges.
+		// Any remaining "{" means a template didn't resolve (missing tag, nil docker info, etc).
+		if value == "" || strings.Contains(value, "{") {
 			value = "n/a"
 		}
 

@@ -11,9 +11,6 @@ A declarative CI/CD automation CLI that detects, builds, scans, and releases con
 <!-- sf:badges:start -->
 [![release](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/release.svg)](https://github.com/sofmeright/stagefreight/releases) [![build](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/build.svg)](https://github.com/sofmeright/stagefreight/actions) [![license](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/license.svg)](https://github.com/sofmeright/stagefreight/blob/main/LICENSE) ![updated](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/updated.svg) [![docker/pulls/prplanit/stagefreight](https://img.shields.io/docker/pulls/prplanit/stagefreight)](https://hub.docker.com/r/prplanit/stagefreight)
 <!-- sf:badges:end -->
-<!-- sf:props:start -->
-[![Go Report Card](https://goreportcard.com/badge/github.com/sofmeright/stagefreight)](https://goreportcard.com/report/github.com/sofmeright/stagefreight) [![Go Reference](https://pkg.go.dev/badge/github.com/sofmeright/stagefreight.svg)](https://pkg.go.dev/github.com/sofmeright/stagefreight) [![GitHub Release](https://img.shields.io/github/v/release/sofmeright/stagefreight?style=flat-square&logo=github)](https://github.com/sofmeright/stagefreight/releases/latest) [![Docker Image Size](https://img.shields.io/docker/image-size/prplanit/stagefreight/latest?logo=docker)](https://hub.docker.com/r/prplanit/stagefreight) [![Last Commit](https://img.shields.io/github/last-commit/sofmeright/stagefreight)](https://github.com/sofmeright/stagefreight/commits)
-<!-- sf:props:end -->
 
 ### Features:
 
@@ -35,12 +32,10 @@ A declarative CI/CD automation CLI that detects, builds, scans, and releases con
 **Latest Dev Build:** [![latest-dev](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/latest-dev.svg)](https://hub.docker.com/r/prplanit/stagefreight/tags?name=latest-dev) ![updated](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/dev-updated.svg) [![size](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/dev-size.svg)](https://hub.docker.com/r/prplanit/stagefreight/tags?name=latest-dev)
 <!-- sf:image:end -->
 
-### Public Resources:
+### Project:
 
-|                  |                                                                                          |
-| ---------------- | ---------------------------------------------------------------------------------------- |
-| Docker Images    | [Docker Hub](https://hub.docker.com/r/prplanit/stagefreight)                             |
-| Source Code      | [GitHub](https://github.com/sofmeright/stagefreight) / [GitLab](https://gitlab.prplanit.com/precisionplanit/stagefreight) |
+<!-- sf:project:start -->
+<!-- sf:project:end -->
 
 ### Documentation:
 
