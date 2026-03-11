@@ -257,14 +257,7 @@ narrator:
           between: ["<!-- sf:image:start -->", "<!-- sf:image:end -->"]
           mode: replace
 
-      # Row 2: Latest Release
-      - id: image.release-label
-        kind: text
-        placement:
-          between: ["<!-- sf:image:start -->", "<!-- sf:image:end -->"]
-          mode: replace
-        content: "**Latest Release:**"
-
+      # Row 2: All tag badges (release + dev)
       - id: image.release-latest
         kind: badge
         placement:
@@ -297,20 +290,7 @@ narrator:
         output: ".stagefreight/badges/release-size.svg"
         link: "https://hub.docker.com/r/{var:org}/{var:repo}/tags?name=v{base}"
 
-      - id: image.break2
-        kind: break
-        placement:
-          between: ["<!-- sf:image:start -->", "<!-- sf:image:end -->"]
-          mode: replace
-
-      # Row 3: Latest Dev Build
-      - id: image.dev-label
-        kind: text
-        placement:
-          between: ["<!-- sf:image:start -->", "<!-- sf:image:end -->"]
-          mode: replace
-        content: "**Latest Dev Build:**"
-
+      # Dev badges (same row)
       - id: image.dev-latest
         kind: badge
         placement:
