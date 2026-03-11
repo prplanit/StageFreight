@@ -273,12 +273,6 @@ narrator:
           mode: replace
         content: "**Latest Release:**"
 
-      - id: image.break-release
-        kind: break
-        placement:
-          between: ["<!-- sf:image:start -->", "<!-- sf:image:end -->"]
-          mode: replace
-
       - id: image.release-latest
         kind: badge
         placement:
@@ -324,12 +318,6 @@ narrator:
           between: ["<!-- sf:image:start -->", "<!-- sf:image:end -->"]
           mode: replace
         content: "**Latest Dev Build:**"
-
-      - id: image.break-dev
-        kind: break
-        placement:
-          between: ["<!-- sf:image:start -->", "<!-- sf:image:end -->"]
-          mode: replace
 
       - id: image.dev-latest
         kind: badge

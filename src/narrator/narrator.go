@@ -6,7 +6,7 @@
 // sections via the section primitives.
 //
 // Items within a row are space-joined (inline).
-// Rows are newline-joined (line breaks).
+// Rows are blank-line-separated (markdown paragraph breaks).
 // Break modules force a new row.
 package narrator
 
@@ -25,7 +25,8 @@ type BreakModule struct{}
 func (BreakModule) Render() string { return "" }
 
 // Compose takes a flat list of modules. Items are space-joined until a
-// BreakModule forces a new line. Returns the composed content string.
+// BreakModule forces a new row. Rows are separated by blank lines for
+// proper markdown paragraph breaks. Returns the composed content string.
 func Compose(modules []Module) string {
 	var lines []string
 	var current []string
@@ -45,7 +46,7 @@ func Compose(modules []Module) string {
 	if len(current) > 0 {
 		lines = append(lines, strings.Join(current, " "))
 	}
-	return strings.Join(lines, "\n")
+	return strings.Join(lines, "\n\n")
 }
 
 // ComposeInline renders all modules and joins them with spaces on a single line.

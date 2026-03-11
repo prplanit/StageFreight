@@ -4,6 +4,10 @@
 
 # StageFreight
 
+<!-- sf:project:start -->
+[![badge/GitHub-source-181717?logo=github](https://img.shields.io/badge/GitHub-source-181717?logo=github)](https://github.com/sofmeright/stagefreight) [![badge/GitLab-source-FC6D26?logo=gitlab](https://img.shields.io/badge/GitLab-source-FC6D26?logo=gitlab)](https://gitlab.prplanit.com/precisionplanit/stagefreight) [![Go Report Card](https://goreportcard.com/badge/github.com/sofmeright/stagefreight)](https://goreportcard.com/report/github.com/sofmeright/stagefreight) [![Go Reference](https://pkg.go.dev/badge/github.com/sofmeright/stagefreight.svg)](https://pkg.go.dev/github.com/sofmeright/stagefreight) [![Last Commit](https://img.shields.io/github/last-commit/sofmeright/stagefreight)](https://github.com/sofmeright/stagefreight/commits) [![Open Issues](https://img.shields.io/github/issues/sofmeright/stagefreight)](https://github.com/sofmeright/stagefreight/issues) ![github/issues-pr/sofmeright/stagefreight](https://img.shields.io/github/issues-pr/sofmeright/stagefreight) [![Contributors](https://img.shields.io/github/contributors/sofmeright/stagefreight)](https://github.com/sofmeright/stagefreight/graphs/contributors)
+<!-- sf:project:end -->
+
 > *Hello World's a Stage*
 
 A declarative CI/CD automation CLI that detects, builds, scans, and releases container images across forges and registries — from a single manifest. StageFreight is open-source, self-building, and replaces fragile shell-script CI pipelines with a single Go binary driven by one [`.stagefreight.yml`](.stagefreight.yml) file.
@@ -11,6 +15,14 @@ A declarative CI/CD automation CLI that detects, builds, scans, and releases con
 <!-- sf:badges:start -->
 [![release](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/release.svg)](https://github.com/sofmeright/stagefreight/releases) [![build](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/build.svg)](https://gitlab.prplanit.com/precisionplanit/stagefreight/-/pipelines) [![license](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/license.svg)](https://github.com/sofmeright/stagefreight/blob/main/LICENSE) ![updated](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/updated.svg) [![docker/pulls/prplanit/stagefreight](https://img.shields.io/docker/pulls/prplanit/stagefreight)](https://hub.docker.com/r/prplanit/stagefreight)
 <!-- sf:badges:end -->
+
+<!-- sf:image:start -->
+**Docker Images:** [`docker.io/prplanit/stagefreight`](https://hub.docker.com/r/prplanit/stagefreight) [![pulls](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/pulls.svg)](https://hub.docker.com/r/prplanit/stagefreight)
+**Latest Release:**
+[![latest](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/latest.svg)](https://hub.docker.com/r/prplanit/stagefreight/tags?name=latest) ![updated](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/release-updated.svg) [![size](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/release-size.svg)](https://hub.docker.com/r/prplanit/stagefreight/tags?name=v0.2.0)
+**Latest Dev Build:**
+[![latest-dev](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/latest-dev.svg)](https://hub.docker.com/r/prplanit/stagefreight/tags?name=latest-dev) ![updated](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/dev-updated.svg) [![size](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/dev-size.svg)](https://hub.docker.com/r/prplanit/stagefreight/tags?name=latest-dev)
+<!-- sf:image:end -->
 
 ### Features:
 
@@ -23,22 +35,6 @@ A declarative CI/CD automation CLI that detects, builds, scans, and releases con
 | **Cache-Aware Linting**        | 9 lint modules run in parallel, delta-only on changed files, with JUnit reporting for CI                  |
 | **Retention Policies**         | Restic-style tag retention (keep_last, daily, weekly, monthly, yearly) across all registry providers       |
 | **Self-Building**              | StageFreight builds itself — this image is produced by `stagefreight docker build`                        |
-
-### Image:
-
-<!-- sf:image:start -->
-**Docker Images:** [`docker.io/prplanit/stagefreight`](https://hub.docker.com/r/prplanit/stagefreight) [![pulls](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/pulls.svg)](https://hub.docker.com/r/prplanit/stagefreight)
-**Latest Release:**
-[![latest](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/latest.svg)](https://hub.docker.com/r/prplanit/stagefreight/tags?name=latest) ![updated](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/release-updated.svg) [![size](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/release-size.svg)](https://hub.docker.com/r/prplanit/stagefreight/tags?name=v0.2.0)
-**Latest Dev Build:**
-[![latest-dev](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/latest-dev.svg)](https://hub.docker.com/r/prplanit/stagefreight/tags?name=latest-dev) ![updated](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/dev-updated.svg) [![size](https://raw.githubusercontent.com/sofmeright/stagefreight/main/.stagefreight/badges/dev-size.svg)](https://hub.docker.com/r/prplanit/stagefreight/tags?name=latest-dev)
-<!-- sf:image:end -->
-
-### Project:
-
-<!-- sf:project:start -->
-[![badge/GitHub-source-181717?logo=github](https://img.shields.io/badge/GitHub-source-181717?logo=github)](https://github.com/sofmeright/stagefreight) [![badge/GitLab-source-FC6D26?logo=gitlab](https://img.shields.io/badge/GitLab-source-FC6D26?logo=gitlab)](https://gitlab.prplanit.com/precisionplanit/stagefreight) [![Go Report Card](https://goreportcard.com/badge/github.com/sofmeright/stagefreight)](https://goreportcard.com/report/github.com/sofmeright/stagefreight) [![Go Reference](https://pkg.go.dev/badge/github.com/sofmeright/stagefreight.svg)](https://pkg.go.dev/github.com/sofmeright/stagefreight) [![Last Commit](https://img.shields.io/github/last-commit/sofmeright/stagefreight)](https://github.com/sofmeright/stagefreight/commits) [![Open Issues](https://img.shields.io/github/issues/sofmeright/stagefreight)](https://github.com/sofmeright/stagefreight/issues) ![github/issues-pr/sofmeright/stagefreight](https://img.shields.io/github/issues-pr/sofmeright/stagefreight) [![Contributors](https://img.shields.io/github/contributors/sofmeright/stagefreight)](https://github.com/sofmeright/stagefreight/graphs/contributors)
-<!-- sf:project:end -->
 
 ### Documentation:
 
