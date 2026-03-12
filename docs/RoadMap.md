@@ -15,6 +15,7 @@ start tracking there.
 
 ### Priority
 
+- [ ] [Distro package version tracking](#freshness-p0-distro-package-version-tracking) — detect stale pinned apt/apk/yum packages in Dockerfiles (CRITICAL GAP)
 - [ ] [Fix Bitnami rNN rebuild suffix bug](#freshness-known-bugs) — `normalizeFamily` produces `debian-r` not `debian`
 - [ ] [Fix isHexHash uppercase detection](#freshness-known-bugs) — only matches lowercase `[a-f0-9]`
 - [ ] [Fix release depth / precision mismatch](#freshness-known-bugs) — `redis:7` incorrectly matches `7.4.2`
@@ -3960,6 +3961,47 @@ overridable per-package via `package_rules[].versioning.precision`.
 ---
 
 ### Freshness: Planned Improvements
+
+#### Freshness P0: Distro Package Version Tracking
+
+**Status:** Not started — CRITICAL GAP
+
+The freshness module only checks base image tags (e.g., `debian:trixie-slim` →
+newer digest available). It has **zero visibility** into pinned distro packages
+installed via `apt-get`, `apk add`, `yum install`, etc. inside the Dockerfile.
+
+This is a critical gap for repackaging projects (e.g., `apt-cacher-ng-oci`,
+`arkserver`) where the Dockerfile pins an upstream package version:
+
+```dockerfile
+ENV APT_CACHER_NG_VERSION=3.7.5-1
+RUN apt-get install -y apt-cacher-ng="${APT_CACHER_NG_VERSION}"
+```
+
+When the upstream distro publishes `3.7.6-1`, nothing in StageFreight detects
+this. Maintainers who shift focus, leave a project, or simply forget will ship
+stale binaries indefinitely — silently defeating the purpose of the project.
+
+**Requirements:**
+- Parse Dockerfile for pinned package versions:
+  - ENV-based pins (`ENV PKG_VERSION=3.7.5-1` → `apt-get install pkg="${PKG_VERSION}"`)
+  - Inline pins (`apt-get install pkg=3.7.5-1`)
+  - apk equivalent (`apk add pkg=3.7.5-r1`)
+- Determine the base image's distro and package manager from the `FROM` line
+- Query the distro's package repo metadata for latest available version:
+  - APT: `Sources`/`Packages` index from the relevant suite (e.g., trixie)
+  - APK: Alpine `APKINDEX` from the relevant branch
+- Report staleness in lint output with the same severity model as base image freshness
+- Must work **without building the image** — static Dockerfile analysis + HTTP repo queries
+- Configurable severity (default: warning, configurable to critical)
+- Cache repo metadata with same TTL model as registry tag lists
+
+**Scope notes:**
+- Language-level package managers (npm, pip, cargo) are a separate concern — this is
+  strictly for OS/distro packages that the Dockerfile installs
+- Multi-stage builds: only check the final stage's base image + installs
+- Best-effort: if the package repo can't be queried (private mirror, unreachable),
+  emit a warning, don't fail
 
 #### Freshness P1: Fix Known Bugs
 
