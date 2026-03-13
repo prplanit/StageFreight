@@ -1,11 +1,29 @@
 package config
 
+// DependencyHandoff controls what happens when dependency repair creates a new commit.
+//   - "continue"          — advisory only, current pipeline continues regardless
+//   - "restart_pipeline"  — request pipeline rerun on repaired revision; downstream shipping stops
+//   - "fail"              — fail hard if repair was needed but couldn't be handed off
+type DependencyHandoff string
+
+const (
+	HandoffContinue        DependencyHandoff = "continue"
+	HandoffRestartPipeline DependencyHandoff = "restart_pipeline"
+	HandoffFail            DependencyHandoff = "fail"
+)
+
+// DependencyCIConfig controls CI-level behavior when deps creates a commit.
+type DependencyCIConfig struct {
+	Handoff DependencyHandoff `yaml:"handoff"` // default: continue
+}
+
 // DependencyConfig holds configuration for the dependency update subsystem.
 type DependencyConfig struct {
-	Enabled bool                  `yaml:"enabled"`
-	Output  string                `yaml:"output"`
-	Scope   DependencyScopeConfig `yaml:"scope"`
+	Enabled bool                   `yaml:"enabled"`
+	Output  string                 `yaml:"output"`
+	Scope   DependencyScopeConfig  `yaml:"scope"`
 	Commit  DependencyCommitConfig `yaml:"commit"`
+	CI      DependencyCIConfig     `yaml:"ci"`
 }
 
 // DependencyScopeConfig controls which dependency ecosystems are managed.
@@ -38,6 +56,9 @@ func DefaultDependencyConfig() DependencyConfig {
 			Message: "update managed dependencies",
 			Push:    true,
 			SkipCI:  true,
+		},
+		CI: DependencyCIConfig{
+			Handoff: HandoffContinue,
 		},
 	}
 }

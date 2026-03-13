@@ -64,15 +64,27 @@ func depsRunner(ctx context.Context, appCfg *config.Config, ciCtx *ci.CIContext,
 
 	// Auto-commit if configured and files changed
 	if appCfg.Dependency.Commit.Enabled && len(result.FilesChanged) > 0 {
-		if err := autoCommitViaPlanner(ctx, appCfg, rootDir, commit.PlannerOptions{
+		commitResult, commitErr := autoCommitViaPlanner(ctx, appCfg, rootDir, commit.PlannerOptions{
 			Type:    appCfg.Dependency.Commit.Type,
 			Scope:   "deps",
 			Message: appCfg.Dependency.Commit.Message,
 			Paths:   result.FilesChanged,
 			SkipCI:  boolPtr(appCfg.Dependency.Commit.SkipCI),
 			Push:    boolPtr(appCfg.Dependency.Commit.Push),
-		}); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: dependency auto-commit failed: %v\n", err)
+		})
+		if commitErr != nil {
+			fmt.Fprintf(os.Stderr, "warning: dependency auto-commit failed: %v\n", commitErr)
+		}
+
+		// Evaluate handoff when a commit was actually created and pushed
+		if commitResult != nil && !commitResult.NoOp && commitResult.Pushed {
+			handoff := ci.EvaluateHandoff(ciCtx, appCfg.Dependency.CI.Handoff, commitResult.SHA)
+			if msg := ci.FormatHandoffMessage(handoff); msg != "" {
+				fmt.Println(msg)
+			}
+			if handoff.Decision == ci.HandoffFail {
+				return fmt.Errorf("deps subsystem: dependency repair at handoff depth %d — policy requires clean revision after handoff", handoff.Depth)
+			}
 		}
 	}
 
@@ -168,6 +180,11 @@ func docsRunner(ctx context.Context, appCfg *config.Config, ciCtx *ci.CIContext,
 		return nil
 	}
 
+	if !ci.IsBranchHeadFresh(ciCtx) {
+		fmt.Println("  docs: skipping — pipeline SHA is not branch HEAD (newer pipeline will ship)")
+		return nil
+	}
+
 	rootDir := resolveWorkspace(ciCtx)
 	gen := appCfg.Docs.Generators
 
@@ -199,7 +216,7 @@ func docsRunner(ctx context.Context, appCfg *config.Config, ciCtx *ci.CIContext,
 
 	// Auto-commit if configured
 	if appCfg.Docs.Commit.Enabled {
-		if err := autoCommitViaPlanner(ctx, appCfg, rootDir, commit.PlannerOptions{
+		if _, err := autoCommitViaPlanner(ctx, appCfg, rootDir, commit.PlannerOptions{
 			Type:    appCfg.Docs.Commit.Type,
 			Message: appCfg.Docs.Commit.Message,
 			Paths:   appCfg.Docs.Commit.Add,
@@ -217,6 +234,11 @@ func docsRunner(ctx context.Context, appCfg *config.Config, ciCtx *ci.CIContext,
 func releaseRunner(ctx context.Context, appCfg *config.Config, ciCtx *ci.CIContext, opts ci.RunOptions) error {
 	if !appCfg.Release.Enabled {
 		fmt.Println("  release disabled in config")
+		return nil
+	}
+
+	if !ci.IsBranchHeadFresh(ciCtx) {
+		fmt.Println("  release: skipping — pipeline SHA is not branch HEAD (newer pipeline will ship)")
 		return nil
 	}
 
@@ -245,25 +267,26 @@ func releaseRunner(ctx context.Context, appCfg *config.Config, ciCtx *ci.CIConte
 // ── commit helpers ───────────────────────────────────────────────────────────
 
 // autoCommitViaPlanner uses commit.BuildPlan + backend.Execute for auto-commit.
+// Returns the commit result for callers that need to inspect it (e.g. handoff).
 // Non-fatal — callers should log warnings on error.
-func autoCommitViaPlanner(ctx context.Context, appCfg *config.Config, rootDir string, opts commit.PlannerOptions) error {
+func autoCommitViaPlanner(ctx context.Context, appCfg *config.Config, rootDir string, opts commit.PlannerOptions) (*commit.Result, error) {
 	registry := commit.NewTypeRegistry(appCfg.Commit.Types)
 	plan, err := commit.BuildPlan(opts, appCfg.Commit, registry, rootDir)
 	if err != nil {
-		return fmt.Errorf("auto-commit plan: %w", err)
+		return nil, fmt.Errorf("auto-commit plan: %w", err)
 	}
 
 	backend := &commit.GitBackend{RootDir: rootDir}
 	result, err := backend.Execute(ctx, plan, appCfg.Commit.Conventional)
 	if err != nil {
-		return fmt.Errorf("auto-commit execute: %w", err)
+		return nil, fmt.Errorf("auto-commit execute: %w", err)
 	}
 	if result.NoOp {
 		fmt.Println("  auto-commit: nothing to commit")
-		return nil
+		return result, nil
 	}
 	fmt.Printf("  auto-commit: %s\n", result.SHA)
-	return nil
+	return result, nil
 }
 
 // boolPtr returns a pointer to a bool value.

@@ -3,8 +3,8 @@
 # This file translates GitLab CI context into StageFreight's normalized contract.
 
 stages:
-  - build
   - deps
+  - build
   - security
   - docs
   - release
@@ -47,22 +47,19 @@ build-image:
     - docker context create tls-context --docker "host=$DOCKER_HOST,ca=$DOCKER_CERT_PATH/ca.pem,cert=$DOCKER_CERT_PATH/cert.pem,key=$DOCKER_CERT_PATH/key.pem"
     - docker buildx create --name stagefreight-builder --use tls-context
   script:
-    # Bootstrap: use direct commands until latest-dev image includes `ci run`.
-    # Next pipeline after this build succeeds can switch to `stagefreight ci run build`.
-    - stagefreight docker build
+    - stagefreight ci run build
   rules:
     - if: '$CI_COMMIT_TAG'
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
 
 dependency-update:
   stage: deps
-  needs: [build-image]
   variables:
     GIT_DEPTH: 0
   before_script:
     - *sf-context
   script:
-    - stagefreight dependency update
+    - stagefreight ci run deps
   artifacts:
     paths: [.stagefreight/deps/]
     expire_in: 1 week
@@ -90,7 +87,7 @@ security-scan:
     - docker context create tls-context --docker "host=$DOCKER_HOST,ca=$DOCKER_CERT_PATH/ca.pem,cert=$DOCKER_CERT_PATH/cert.pem,key=$DOCKER_CERT_PATH/key.pem"
     - docker buildx create --name security-scanner --use tls-context
   script:
-    - stagefreight security scan
+    - stagefreight ci run security
   rules:
     - if: '$CI_COMMIT_TAG'
       when: on_success
@@ -108,7 +105,7 @@ generate-docs:
   before_script:
     - *sf-context
   script:
-    - stagefreight docs run
+    - stagefreight ci run docs
   rules:
     - if: '$CI_COMMIT_TAG'
       when: on_success
@@ -129,7 +126,7 @@ create-release:
   before_script:
     - *sf-context
   script:
-    - stagefreight release create --tag "$CI_COMMIT_TAG"
+    - stagefreight ci run release
   rules:
     - if: '$CI_COMMIT_TAG'
       when: on_success

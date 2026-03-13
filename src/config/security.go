@@ -49,24 +49,6 @@ type SecurityConfig struct {
 	OverwhelmLink string `yaml:"overwhelm_link"`
 }
 
-// UnmarshalYAML accepts both "output" (canonical) and "output_dir" (deprecated)
-// so that crucible self-build can bootstrap across the rename.
-func (s *SecurityConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
-	type plain SecurityConfig // avoid recursion
-	var raw struct {
-		plain       `yaml:",inline"`
-		OutputDirV1 string `yaml:"output_dir"` // deprecated alias
-	}
-	if err := unmarshal(&raw); err != nil {
-		return err
-	}
-	*s = SecurityConfig(raw.plain)
-	if s.OutputDir == "" && raw.OutputDirV1 != "" {
-		s.OutputDir = raw.OutputDirV1
-	}
-	return nil
-}
-
 // DetailRule is a conditional override for security detail level in release notes.
 // Embeds Condition for standard tag/branch pattern matching.
 type DetailRule struct {
