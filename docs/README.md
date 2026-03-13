@@ -11,6 +11,7 @@ Generated reference pages — authoritative, always in sync with code:
 
 Feature-focused guides with concepts, examples, and workflows:
 
+- [CI Integration](CI.md) — provider skeletons, required tokens and scopes, cross-pipeline advisory bridge
 - [Docker Build](Docker.md) — `builds:` + `targets:` for container images, cache, retention, build strategy
 - [Release Management](Release.md) — `kind: release` targets, rolling tags, cross-forge sync
 - [Narrator & Badges](Narrator.md) — content composition, badge generation, `kind: include`
