@@ -1096,6 +1096,7 @@ in release notes.
 | `--sbom` | bool | `true` | generate SBOM artifacts |
 | `--security-detail` | string | — | override detail level for summary: none, counts, detailed, full |
 | `--skip` | bool | — | skip scan (for pipeline control) |
+| `--strict` | bool | — | fail if scan is partial, target lacks digest identity, or artifact verification fails |
 | `-o, --output` | string | — | output directory for artifacts (default: from config) |
 
 **Inherited flags:**
