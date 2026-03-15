@@ -103,6 +103,13 @@ func (m *freshnessModule) correlateVulns(ctx context.Context, deps []Dependency)
 				FixedIn:  extractFixedVersion(v.Affected, dep.Name, osvEco),
 				Source:   "osv",
 			}
+			// Skip vulns already fixed in the installed version.
+			if vi.FixedIn != "" {
+				delta := compareDependencyVersions(version, vi.FixedIn, dep.Ecosystem)
+				if delta.Major < 0 || (delta.Major == 0 && delta.Minor < 0) || (delta.Major == 0 && delta.Minor == 0 && delta.Patch <= 0) {
+					continue
+				}
+			}
 			dep.Vulnerabilities = append(dep.Vulnerabilities, vi)
 		}
 	}

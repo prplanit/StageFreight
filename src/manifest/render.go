@@ -182,9 +182,67 @@ func RenderSection(m *Manifest, section, renderer string, columns []string) (str
 		return RenderList(data)
 	case "kv":
 		return RenderKV(data)
+	case "badges":
+		return RenderBadges(data)
 	default:
 		return "", fmt.Errorf("unknown renderer %q", renderer)
 	}
+}
+
+// RenderBadges renders an array of inventory items as inline shields.io badge images.
+// Items with version+pinned get green badges, version+unpinned get blue, no version gets grey.
+func RenderBadges(data interface{}) (string, error) {
+	items, err := toMapSlice(data)
+	if err != nil {
+		return "", fmt.Errorf("badges renderer: %w", err)
+	}
+	if len(items) == 0 {
+		return "*No items*", nil
+	}
+
+	var badges []string
+	for _, item := range items {
+		name := formatCell(item["name"])
+		version := formatCell(item["version"])
+		pinned := false
+		if p, ok := item["pinned"]; ok {
+			switch v := p.(type) {
+			case bool:
+				pinned = v
+			case string:
+				pinned = v == "yes" || v == "true"
+			}
+		}
+
+		encoded := shieldsEncode(name)
+		var badge string
+		if version != "" && version != "null" {
+			encodedVer := shieldsEncode(version)
+			color := "0078D4" // blue = unpinned
+			if pinned {
+				color = "2ea043" // green = pinned
+			}
+			badge = fmt.Sprintf("![%s](https://img.shields.io/badge/%s-%s-%s?style=flat)", name, encoded, encodedVer, color)
+		} else {
+			badge = fmt.Sprintf("![%s](https://img.shields.io/badge/%s-555?style=flat)", name, encoded)
+		}
+		badges = append(badges, badge)
+	}
+
+	return strings.Join(badges, " "), nil
+}
+
+// shieldsEncode encodes a string for use in shields.io badge URLs.
+// Spaces become underscores, hyphens become double-hyphens, and special chars are URL-encoded.
+func shieldsEncode(s string) string {
+	s = strings.ReplaceAll(s, "-", "--")
+	s = strings.ReplaceAll(s, "_", "__")
+	s = strings.ReplaceAll(s, " ", "_")
+	// URL-encode characters that break shields.io URLs
+	for _, c := range []string{"#", "%", "&", "?", "/"} {
+		s = strings.ReplaceAll(s, c, fmt.Sprintf("%%%02X", c[0]))
+	}
+	return s
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

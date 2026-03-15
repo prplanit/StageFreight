@@ -435,8 +435,8 @@ func validateNarratorItem(item NarratorItem, path string) []string {
 		}
 		if item.Renderer == "" {
 			errs = append(errs, fmt.Sprintf("%s: kind build-contents requires renderer (table, list, or kv)", path))
-		} else if item.Renderer != "table" && item.Renderer != "list" && item.Renderer != "kv" {
-			errs = append(errs, fmt.Sprintf("%s: unknown renderer %q (supported: table, list, kv)", path, item.Renderer))
+		} else if item.Renderer != "table" && item.Renderer != "list" && item.Renderer != "kv" && item.Renderer != "badges" {
+			errs = append(errs, fmt.Sprintf("%s: unknown renderer %q (supported: table, list, kv, badges)", path, item.Renderer))
 		}
 		if item.OutputFile != "" {
 			if pathErrs := validateOutputPath(item.OutputFile, path+".output_file"); len(pathErrs) > 0 {
