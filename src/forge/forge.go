@@ -92,6 +92,13 @@ type Forge interface {
 	// DeleteRelease removes a release by its tag name.
 	DeleteRelease(ctx context.Context, tagName string) error
 
+	// CreateTag creates a lightweight git tag pointing at a ref.
+	// Used for rolling tag aliases (e.g., "latest") that are not releases.
+	CreateTag(ctx context.Context, tagName, ref string) error
+
+	// DeleteTag deletes a git tag.
+	DeleteTag(ctx context.Context, tagName string) error
+
 	// DownloadJobArtifact fetches a single file from the latest successful job's
 	// artifacts for the given ref. Returns the raw file bytes.
 	// Returns os.ErrNotExist (or equivalent) if no artifacts found.

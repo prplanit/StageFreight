@@ -400,6 +400,19 @@ func (g *GitHubForge) DeleteRelease(ctx context.Context, tagName string) error {
 	return g.doJSON(ctx, "DELETE", g.apiURL(fmt.Sprintf("/releases/%d", rel.ID)), nil, nil)
 }
 
+func (g *GitHubForge) CreateTag(ctx context.Context, tagName, ref string) error {
+	// GitHub: create a lightweight tag via the git refs API
+	payload := map[string]interface{}{
+		"ref": "refs/tags/" + tagName,
+		"sha": ref,
+	}
+	return g.doJSON(ctx, "POST", g.apiURL("/git/refs"), payload, nil)
+}
+
+func (g *GitHubForge) DeleteTag(ctx context.Context, tagName string) error {
+	return g.doJSON(ctx, "DELETE", g.apiURL("/git/refs/tags/"+tagName), nil, nil)
+}
+
 func (g *GitHubForge) DownloadJobArtifact(ctx context.Context, ref, jobName, artifactPath string) ([]byte, error) {
 	return nil, ErrNotSupported
 }

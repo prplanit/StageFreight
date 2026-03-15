@@ -395,7 +395,8 @@ func runReleaseCreate(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Auto-tagging: create rolling releases for configured aliases on primary release target
+	// Auto-tagging: create rolling git tags for configured aliases on primary release target.
+	// These are lightweight git tags (not releases) — they point at the release tag.
 	if primaryRelease != nil && len(primaryRelease.Aliases) > 0 {
 		currentTag := os.Getenv("CI_COMMIT_TAG")
 		// Check when conditions on the primary release target
@@ -406,23 +407,11 @@ func runReleaseCreate(cmd *cobra.Command, args []string) error {
 					continue
 				}
 				// Try create, fallback to delete+recreate on conflict
-				_, err := forgeClient.CreateRelease(ctx, forge.ReleaseOptions{
-					TagName:     rt,
-					Ref:         tag,
-					Name:        rt,
-					Description: fmt.Sprintf("Rolling tag for %s", tag),
-					Prerelease:  rcPrerelease,
-				})
+				err := forgeClient.CreateTag(ctx, rt, tag)
 				if err != nil {
 					// Rolling tag may already exist — delete then recreate
-					_ = forgeClient.DeleteRelease(ctx, rt)
-					_, err = forgeClient.CreateRelease(ctx, forge.ReleaseOptions{
-						TagName:     rt,
-						Ref:         tag,
-						Name:        rt,
-						Description: fmt.Sprintf("Rolling tag for %s", tag),
-						Prerelease:  rcPrerelease,
-					})
+					_ = forgeClient.DeleteTag(ctx, rt)
+					err = forgeClient.CreateTag(ctx, rt, tag)
 					if err != nil {
 						report.Tags = append(report.Tags, actionResult{Name: rt, Err: err})
 						fmt.Fprintf(os.Stderr, "warning: rolling tag %s: %v\n", rt, err)

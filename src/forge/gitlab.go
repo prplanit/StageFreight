@@ -373,6 +373,18 @@ func (g *GitLabForge) DeleteRelease(ctx context.Context, tagName string) error {
 	return g.doJSON(ctx, "DELETE", releaseURL, nil, nil)
 }
 
+func (g *GitLabForge) CreateTag(ctx context.Context, tagName, ref string) error {
+	payload := map[string]interface{}{
+		"tag_name": tagName,
+		"ref":      ref,
+	}
+	return g.doJSON(ctx, "POST", g.apiURL("/repository/tags"), payload, nil)
+}
+
+func (g *GitLabForge) DeleteTag(ctx context.Context, tagName string) error {
+	return g.doJSON(ctx, "DELETE", g.apiURL(fmt.Sprintf("/repository/tags/%s", url.PathEscape(tagName))), nil, nil)
+}
+
 func (g *GitLabForge) projectWebURL() string {
 	// CI_PROJECT_PATH is already "group/project", just join with base
 	return fmt.Sprintf("%s/%s", g.BaseURL, g.ProjectID)

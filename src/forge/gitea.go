@@ -397,6 +397,18 @@ func (g *GiteaForge) DeleteRelease(ctx context.Context, tagName string) error {
 	return fmt.Errorf("release for tag %s not found", tagName)
 }
 
+func (g *GiteaForge) CreateTag(ctx context.Context, tagName, ref string) error {
+	payload := map[string]interface{}{
+		"tag_name": tagName,
+		"target":   ref,
+	}
+	return g.doJSON(ctx, "POST", g.apiURL("/tags"), payload, nil)
+}
+
+func (g *GiteaForge) DeleteTag(ctx context.Context, tagName string) error {
+	return g.doJSON(ctx, "DELETE", g.apiURL("/tags/"+tagName), nil, nil)
+}
+
 func (g *GiteaForge) DownloadJobArtifact(ctx context.Context, ref, jobName, artifactPath string) ([]byte, error) {
 	return nil, ErrNotSupported
 }
