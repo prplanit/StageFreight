@@ -10,6 +10,7 @@ import (
 
 	"github.com/PrPlanIT/StageFreight/src/build"
 	"github.com/PrPlanIT/StageFreight/src/config"
+	"github.com/PrPlanIT/StageFreight/src/diag"
 )
 
 // GenerateOptions controls manifest generation behavior.
@@ -145,7 +146,7 @@ func generateForBuild(cfg *config.Config, bc config.BuildConfig, opts GenerateOp
 	inv, err := build.ExtractInventory(dockerfilePath)
 	if err != nil {
 		// Non-fatal: inventory extraction is best-effort
-		fmt.Fprintf(os.Stderr, "  warning: inventory extraction failed for %s: %v\n", bc.ID, err)
+		diag.Warn("  warning: inventory extraction failed for %s: %v", bc.ID, err)
 	} else {
 		m.Inventories = convertInventory(inv)
 	}
