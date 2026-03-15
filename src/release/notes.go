@@ -315,7 +315,7 @@ func renderNotes(input NotesInput, categories []CommitCategory, allCommits []Com
 	if project == "" {
 		project = "release"
 	}
-	b.WriteString(fmt.Sprintf("## 🌎 %s — `v%s`\n", project, version))
+	b.WriteString(fmt.Sprintf("## 📦 %s — `v%s`\n", project, version))
 
 	// Metadata line
 	var meta []string
@@ -399,20 +399,41 @@ func renderNotes(input NotesInput, categories []CommitCategory, allCommits []Com
 	}
 
 	// 5. Notable Changes (H2 wrapper, H4 categories)
+	// Deduplicate commits within each category by summary+scope+author.
 	if len(categories) > 0 {
 		b.WriteString("## Notable Changes\n\n")
 		for _, cat := range categories {
 			b.WriteString(fmt.Sprintf("#### %s\n", cat.Title))
+			type dedupKey struct{ scope, summary, author string }
+			seen := make(map[dedupKey]int)
+			type dedupEntry struct {
+				key   dedupKey
+				count int
+			}
+			var entries []dedupEntry
 			for _, c := range cat.Commits {
+				k := dedupKey{c.Scope, c.Summary, c.Author}
+				if idx, ok := seen[k]; ok {
+					entries[idx].count++
+				} else {
+					seen[k] = len(entries)
+					entries = append(entries, dedupEntry{key: k, count: 1})
+				}
+			}
+			for _, e := range entries {
 				scope := ""
-				if c.Scope != "" {
-					scope = fmt.Sprintf("**%s**: ", c.Scope)
+				if e.key.scope != "" {
+					scope = fmt.Sprintf("**%s**: ", e.key.scope)
 				}
 				author := ""
-				if c.Author != "" {
-					author = fmt.Sprintf(" (%s)", c.Author)
+				if e.key.author != "" {
+					author = fmt.Sprintf(" (%s)", e.key.author)
 				}
-				b.WriteString(fmt.Sprintf("- %s%s%s\n", scope, c.Summary, author))
+				countSuffix := ""
+				if e.count > 1 {
+					countSuffix = fmt.Sprintf(" ×%d", e.count)
+				}
+				b.WriteString(fmt.Sprintf("- %s%s%s%s\n", scope, e.key.summary, author, countSuffix))
 			}
 			b.WriteString("\n")
 		}
