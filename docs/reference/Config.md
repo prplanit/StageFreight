@@ -137,6 +137,7 @@ Named build artifacts. Each build has a unique ID referenced by targets. Current
 | `kind` | `kind` | string | Yes | — | Build type. Determines which fields are valid. |
 | `select_tags` | `select_tags` | []string | No | — | Tags for CLI filtering via `--select`. |
 | `build_mode` | `build_mode` | string | No | (standard) | Build execution strategy. |
+| `depends_on` | `depends_on` | string | No | — | string value |
 | `dockerfile` | `dockerfile` | string | No | auto-detected | Path to the Dockerfile. |
 | `context` | `context` | string | No | "." | Docker build context path. |
 | `target` | `target` | string | No | — | Multi-stage build `--target` stage name. |
@@ -145,6 +146,15 @@ Named build artifacts. Each build has a unique ID referenced by targets. Current
 | `paths` | `cache.watch.paths` | []string | Yes | — | Glob patterns for files to watch for changes. |
 | `invalidates` | `cache.watch.invalidates` | []string | Yes | — | Build stage names invalidated when watched files change. |
 | `auto_detect` | `cache.auto_detect` | bool | Yes | true | Auto-detect cache-relevant files from Dockerfile COPY/ADD instructions. |
+| `language` | `language` | string | No | — | string value |
+| `entry` | `entry` | string | No | — | string value |
+| `binary_name` | `binary_name` | string | No | — | string value |
+| `output` | `output` | string | No | — | string value |
+| `ldflags` | `ldflags` | []string | No | — | []string value |
+| `env` | `env` | map[string]string | No | — | map[string]string value |
+| `strip` | `strip` | bool | No | — | bool value |
+| `compress` | `compress` | bool | No | — | bool value |
+| `toolchain_image` | `crucible.toolchain_image` | string | No | — | string value |
 
 **`kind` allowed values:** `docker`
 
@@ -200,6 +210,12 @@ Distribution targets and side-effects. Each target has a `kind` that determines 
 | `project_id` | `project_id` | string | No | — | Project identifier (`owner/repo` or numeric ID). `kind: release`, remote targets only. |
 | `sync_release` | `sync_release` | bool | No | — | Sync release notes + tags to a remote forge. `kind: release`, remote targets only. |
 | `sync_assets` | `sync_assets` | bool | No | — | Sync scan artifacts to a remote forge. `kind: release`, remote targets only. |
+| `archives` | `archives` | string | No | — | string value |
+| `binary_name` | `binary_name` | string | No | — | string value |
+| `format` | `format` | string | No | — | string value |
+| `name` | `name` | string | No | — | string value |
+| `include` | `include` | []string | No | — | []string value |
+| `checksums` | `checksums` | bool | No | — | bool value |
 
 **`kind` allowed values:** `registry`, `docker-readme`, `gitlab-component`, `release`
 
@@ -410,6 +426,9 @@ commit:
 | `message` | `commit.message` | string | Yes | — | string value |
 | `push` | `commit.push` | bool | Yes | — | bool value |
 | `skip_ci` | `commit.skip_ci` | bool | Yes | — | bool value |
+| `promotion` | `commit.promotion` | string | Yes | — | string value |
+| `branch_prefix` | `commit.mr.branch_prefix` | string | Yes | — | string value |
+| `target_branch` | `commit.mr.target_branch` | string | Yes | — | string value |
 | `handoff` | `ci.handoff` | string | Yes | — | string value |
 
 ---
