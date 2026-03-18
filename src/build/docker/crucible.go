@@ -10,8 +10,6 @@ import (
 	"runtime"
 	"strings"
 	"time"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/PrPlanIT/StageFreight/src/build"
 	"github.com/PrPlanIT/StageFreight/src/build/pipeline"
@@ -452,14 +450,11 @@ func runCrucibleMode(req Request) error {
 		pipeline.RenderExitReason(w, childFailure)
 	}
 
-	// Verdict — lore lines stay, body line surfaces the actual issue.
+	// Verdict — sacred elephant law: these lines do NOT change.
 	switch {
 	case !cruciblePassed:
-		verdictBody := "Build failed; leadership remains with the current tribe leader."
-		if childFailure != nil && childFailure.Reason != "" {
-			verdictBody = fmt.Sprintf("%s; leadership remains with the current tribe leader.", capitalizeFirst(childFailure.Reason))
-		}
-		crucibleVerdict(w, "the calf is not yet mature", verdictBody)
+		crucibleVerdict(w, "the calf is not yet mature",
+			"Self-build failed; leadership remains with the current tribe leader.")
 	case verification != nil && verification.HasHardFailure():
 		crucibleVerdict(w, "self-awareness remains incomplete",
 			"The calf's self-assessment differs from the judgment of the tribe leader.")
@@ -482,15 +477,6 @@ func crucibleVerdict(w io.Writer, title, body string) {
 	fmt.Fprintf(w, "    %s\n", body)
 	fmt.Fprintln(w, "    ──────────────────────────────────────────────────────────────")
 	fmt.Fprintln(w)
-}
-
-// capitalizeFirst uppercases the first rune of s.
-func capitalizeFirst(s string) string {
-	if s == "" {
-		return s
-	}
-	r, size := utf8.DecodeRuneInString(s)
-	return string(unicode.ToUpper(r)) + s[size:]
 }
 
 // checkStatusIcon returns the appropriate icon for a verification check status.
