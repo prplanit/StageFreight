@@ -357,16 +357,16 @@ func runCrucibleMode(req Request) error {
 		}
 		output.SummaryRow(w, "verification", verStatus, build.TrustLevelLabel(verification.TrustLevel), color)
 	} else if cruciblePassed {
-		output.SummaryRow(w, "verification", "failed", "verification unavailable", color)
+		output.SummaryRow(w, "verification", "failed", "skipped — verification infra error", color)
 	} else {
-		output.SummaryRow(w, "verification", "failed", "not reached", color)
+		output.SummaryRow(w, "verification", "failed", "skipped — publication failed", color)
 	}
 
 	// Crucible row
 	if cruciblePassed {
 		output.SummaryRow(w, "crucible", "success", "self-build verified", color)
 	} else {
-		output.SummaryRow(w, "crucible", "failed", "self-build failed", color)
+		output.SummaryRow(w, "crucible", "failed", "candidate build failed", color)
 	}
 
 	// Provenance

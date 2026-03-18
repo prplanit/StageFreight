@@ -15,6 +15,14 @@ import (
 	"github.com/PrPlanIT/StageFreight/src/version"
 )
 
+// FailureDetail captures operator-meaningful error context for the Exit Reason section.
+type FailureDetail struct {
+	Command  string // "docker push cr.pcfae.com/prplanit/stagefreight:dev-ff98a93"
+	ExitCode int    // 1
+	Reason   string // "HTTP 500 (registry)"
+	Stderr   string // raw stderr for --verbose
+}
+
 // PhaseResult is what each phase reports for the summary table.
 type PhaseResult struct {
 	Name    string
@@ -22,6 +30,7 @@ type PhaseResult struct {
 	Summary string // one-line detail
 	Elapsed time.Duration
 	Details map[string]string // optional structured metadata
+	Failure *FailureDetail    // operator-facing error context; nil on success
 }
 
 // Phase is a named unit of pipeline work.

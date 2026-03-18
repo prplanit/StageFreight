@@ -19,6 +19,30 @@ import (
 	"github.com/PrPlanIT/StageFreight/src/registry"
 )
 
+// classifyPushError parses stderr from a docker push and returns a short
+// operator-meaningful reason with an owner tag in parentheses.
+func classifyPushError(stderr string) string {
+	s := strings.ToLower(stderr)
+	switch {
+	case strings.Contains(s, "500 internal server error"):
+		return "HTTP 500 (registry)"
+	case strings.Contains(s, "401") || strings.Contains(s, "unauthorized"):
+		return "authentication failed (credentials)"
+	case strings.Contains(s, "403") || strings.Contains(s, "denied"):
+		return "permission denied (credentials)"
+	case strings.Contains(s, "404") || strings.Contains(s, "not found"):
+		return "repository not found (registry)"
+	case strings.Contains(s, "timeout") || strings.Contains(s, "deadline"):
+		return "connection timed out (network)"
+	case strings.Contains(s, "no such host") || strings.Contains(s, "lookup"):
+		return "DNS resolution failed (network)"
+	case strings.Contains(s, "certificate") || strings.Contains(s, "x509"):
+		return "TLS certificate error (network)"
+	default:
+		return "push failed"
+	}
+}
+
 // executePhase builds images via buildx, pushes, and signs.
 // Build + push + sign are kept in one phase because they share buildx state,
 // publish manifest accumulation, and deferred metadata file cleanup.
@@ -135,6 +159,12 @@ func executePhase(req Request) pipeline.Phase {
 						Status:  "failed",
 						Summary: "build failed",
 						Elapsed: buildElapsed,
+						Failure: &pipeline.FailureDetail{
+							Command:  fmt.Sprintf("docker buildx build %s", step.Name),
+							ExitCode: 1,
+							Reason:   "build failed",
+							Stderr:   stderrBuf.String(),
+						},
 					}, err
 				}
 			}
@@ -287,12 +317,24 @@ func executePhase(req Request) pipeline.Phase {
 						}
 					}
 					if err != nil {
-						// Surface the docker push stderr so the actual failure reason is visible.
-						if detail := pushStderrBuf.String(); detail != "" {
-							diag.Warn("push stderr:\n%s", detail)
+						pushStderr := pushStderrBuf.String()
+						reason := classifyPushError(pushStderr)
+						failedTag := ""
+						if len(remoteTags) > 0 {
+							failedTag = remoteTags[0]
 						}
 						output.SectionEnd(pc.Writer, "sf_push")
-						return nil, err
+						return &pipeline.PhaseResult{
+							Name:    "build",
+							Status:  "failed",
+							Summary: fmt.Sprintf("image push failed — %s", reason),
+							Failure: &pipeline.FailureDetail{
+								Command:  fmt.Sprintf("docker push %s", failedTag),
+								ExitCode: 1,
+								Reason:   reason,
+								Stderr:   pushStderr,
+							},
+						}, err
 					}
 				}
 
