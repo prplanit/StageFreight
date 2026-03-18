@@ -1,11 +1,20 @@
 package pipeline
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/PrPlanIT/StageFreight/src/build"
 	"github.com/PrPlanIT/StageFreight/src/output"
 )
+
+// FailureDetailFile is the well-known path (relative to rootDir) where the
+// inner build writes FailureDetail for the outer crucible to pick up.
+const FailureDetailFile = ".stagefreight/failure-detail.json"
 
 // renderSummary writes the summary table from accumulated PhaseResults.
 func renderSummary(pc *PipelineContext) {
@@ -45,17 +54,51 @@ func renderSummary(pc *PipelineContext) {
 	output.SummaryTotal(pc.Writer, totalElapsed, overallStatus, pc.Color)
 	sumSec.Close()
 
-	// Exit Reason section — operator-facing failure context
-	if failure != nil {
-		renderExitReason(pc, failure)
+	if failure == nil {
+		return
 	}
+
+	// Crucible child: write FailureDetail to disk for the outer process.
+	// Do NOT render Exit Reason — the outer crucible owns that.
+	if build.IsCrucibleChild() {
+		writeFailureDetail(pc.RootDir, failure)
+		return
+	}
+
+	// Standard pipeline: render Exit Reason inline after the summary.
+	RenderExitReason(pc.Writer, failure)
 }
 
-// renderExitReason renders the operator-facing Exit Reason box.
-// Single-line when command + exit code + reason fit in ~80 chars, two-line otherwise.
-func renderExitReason(pc *PipelineContext, f *FailureDetail) {
-	w := pc.Writer
+// writeFailureDetail persists a FailureDetail as JSON for the outer crucible.
+func writeFailureDetail(rootDir string, f *FailureDetail) {
+	p := filepath.Join(rootDir, FailureDetailFile)
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	data, err := json.Marshal(f)
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(p, data, 0o644)
+}
 
+// ReadFailureDetail loads a FailureDetail written by a crucible child.
+// Returns nil if the file doesn't exist or can't be parsed.
+func ReadFailureDetail(rootDir string) *FailureDetail {
+	p := filepath.Join(rootDir, FailureDetailFile)
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return nil
+	}
+	var f FailureDetail
+	if err := json.Unmarshal(data, &f); err != nil {
+		return nil
+	}
+	return &f
+}
+
+// RenderExitReason renders the operator-facing Exit Reason box.
+// Single-line when command + exit code + reason fit in ~80 chars, two-line otherwise.
+// Exported so the outer crucible path can call it.
+func RenderExitReason(w io.Writer, f *FailureDetail) {
 	exitSuffix := ""
 	if f.ExitCode != 0 {
 		exitSuffix = fmt.Sprintf(" (exit %d)", f.ExitCode)
@@ -72,16 +115,4 @@ func renderExitReason(pc *PipelineContext, f *FailureDetail) {
 		fmt.Fprintf(w, "│ reason: %s\n", f.Reason)
 	}
 	fmt.Fprintln(w, "└──────────────────────────────────────────────────────────────")
-
-	// Dump stderr in CI collapsed section or when verbose
-	if f.Stderr != "" {
-		if pc.CI {
-			output.SectionStartCollapsed(pc.Writer, "sf_exit_stderr", "Failure Stderr")
-			fmt.Fprint(w, f.Stderr)
-			output.SectionEnd(pc.Writer, "sf_exit_stderr")
-		} else if pc.Verbose {
-			fmt.Fprintln(w)
-			fmt.Fprint(w, f.Stderr)
-		}
-	}
 }

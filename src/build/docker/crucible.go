@@ -10,6 +10,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/PrPlanIT/StageFreight/src/build"
 	"github.com/PrPlanIT/StageFreight/src/build/pipeline"
@@ -442,10 +444,22 @@ func runCrucibleMode(req Request) error {
 	output.SummaryTotal(w, totalElapsed, overallStatus, color)
 	sumSec.Close()
 
+	// Read FailureDetail written by the crucible child (pass 2).
+	childFailure := pipeline.ReadFailureDetail(rootDir)
+
+	// Exit Reason — rendered between summary and verdict.
+	if childFailure != nil {
+		pipeline.RenderExitReason(w, childFailure)
+	}
+
+	// Verdict — lore lines stay, body line surfaces the actual issue.
 	switch {
 	case !cruciblePassed:
-		crucibleVerdict(w, "the calf is not yet mature",
-			"Self-build failed; leadership remains with the current tribe leader.")
+		verdictBody := "Build failed; leadership remains with the current tribe leader."
+		if childFailure != nil && childFailure.Reason != "" {
+			verdictBody = fmt.Sprintf("%s; leadership remains with the current tribe leader.", capitalizeFirst(childFailure.Reason))
+		}
+		crucibleVerdict(w, "the calf is not yet mature", verdictBody)
 	case verification != nil && verification.HasHardFailure():
 		crucibleVerdict(w, "self-awareness remains incomplete",
 			"The calf's self-assessment differs from the judgment of the tribe leader.")
@@ -455,7 +469,7 @@ func runCrucibleMode(req Request) error {
 	}
 
 	if crucibleErr != nil {
-		return fmt.Errorf("crucible: %w", crucibleErr)
+		return crucibleErr
 	}
 
 	return nil
@@ -468,6 +482,15 @@ func crucibleVerdict(w io.Writer, title, body string) {
 	fmt.Fprintf(w, "    %s\n", body)
 	fmt.Fprintln(w, "    ──────────────────────────────────────────────────────────────")
 	fmt.Fprintln(w)
+}
+
+// capitalizeFirst uppercases the first rune of s.
+func capitalizeFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	r, size := utf8.DecodeRuneInString(s)
+	return string(unicode.ToUpper(r)) + s[size:]
 }
 
 // checkStatusIcon returns the appropriate icon for a verification check status.
