@@ -61,9 +61,6 @@ type Config struct {
 
 	// Release holds configuration for the release subsystem.
 	Release ReleaseConfig `yaml:"release"`
-
-	// CI holds CI pipeline behavior configuration.
-	CI CIConfig `yaml:"ci"`
 }
 
 // Load reads configuration from a YAML file.
@@ -118,6 +115,5 @@ func defaults() *Config {
 		Docs:       DefaultDocsConfig(),
 		Manifest:   DefaultManifestConfig(),
 		Release:    DefaultReleaseConfig(),
-		CI:         DefaultCIConfig(),
 	}
 }

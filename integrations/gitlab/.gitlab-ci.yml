@@ -44,8 +44,7 @@ build-image:
       - dist/
     reports:
       junit: .stagefreight/reports/lint.xml
-      dotenv: .stagefreight/sf.env
-    expire_in: $SF_ARTIFACT_EXPIRY
+    expire_in: 7 days # override in your .gitlab-ci.yml if your pipeline needs a different retention window
   before_script:
     - *sf-context
     - docker context create tls-context --docker "host=$DOCKER_HOST,ca=$DOCKER_CERT_PATH/ca.pem,cert=$DOCKER_CERT_PATH/cert.pem,key=$DOCKER_CERT_PATH/key.pem"
@@ -75,7 +74,7 @@ dependency-update:
     - stagefreight ci run deps
   artifacts:
     paths: [.stagefreight/deps/]
-    expire_in: $SF_ARTIFACT_EXPIRY
+    expire_in: 7 days # override in your .gitlab-ci.yml if your pipeline needs a different retention window
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
       when: on_success
@@ -94,7 +93,7 @@ security-scan:
     DOCKER_TLS_CERTDIR: "/certs"
   artifacts:
     paths: [.stagefreight/security/]
-    expire_in: $SF_ARTIFACT_EXPIRY
+    expire_in: 7 days # override in your .gitlab-ci.yml if your pipeline needs a different retention window
   before_script:
     - *sf-context
     - docker context create tls-context --docker "host=$DOCKER_HOST,ca=$DOCKER_CERT_PATH/ca.pem,cert=$DOCKER_CERT_PATH/cert.pem,key=$DOCKER_CERT_PATH/key.pem"
