@@ -66,6 +66,36 @@ func EnsureHarborProjects(ctx context.Context, registries []build.RegistryTarget
 	return nil
 }
 
+// IsHarborProjectMissingPushError reports whether the given push stderr
+// appears to indicate a Harbor "project not found" failure.
+// Returns false immediately if no Harbor registries are present.
+//
+// This is a narrow heuristic used only for recovery (auto-create + retry),
+// not a definitive classification of Harbor errors.
+func IsHarborProjectMissingPushError(registries []build.RegistryTarget, stderr string) bool {
+	hasHarbor := false
+	for _, reg := range registries {
+		if registry.NormalizeProvider(reg.Provider) == "harbor" {
+			hasHarbor = true
+			break
+		}
+	}
+	if !hasHarbor {
+		return false
+	}
+
+	lower := strings.ToLower(stderr)
+	hasProject := strings.Contains(lower, "project")
+	hasMissing := strings.Contains(lower, "not found") ||
+		strings.Contains(lower, "does not exist")
+	hasContext := strings.Contains(lower, "harbor") ||
+		strings.Contains(lower, "denied") ||
+		strings.Contains(lower, "unauthorized") ||
+		strings.Contains(lower, "manifest") ||
+		strings.Contains(lower, "repository")
+	return hasProject && hasMissing && hasContext
+}
+
 // TriggerHarborScans fires a vulnerability scan on Harbor for each pushed tag
 // where native_scan: true is configured. Best-effort — scan failures are warned,
 // never fail the build. Must be called after push. Dedupes by (registryURL, path, tag).
