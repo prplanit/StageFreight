@@ -287,6 +287,10 @@ func executePhase(req Request) pipeline.Phase {
 						}
 					}
 					if err != nil {
+						// Surface the docker push stderr so the actual failure reason is visible.
+						if detail := pushStderrBuf.String(); detail != "" {
+							diag.Warn("push stderr:\n%s", detail)
+						}
 						output.SectionEnd(pc.Writer, "sf_push")
 						return nil, err
 					}
