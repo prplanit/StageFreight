@@ -89,6 +89,19 @@ targets:
     when: { branches: [main], events: [push] }
     credentials: HARBOR
 
+  # ── Harbor: stable releases ─────────────────────────────────
+  - id: harbor-stable
+    kind: registry
+    build: stagefreight
+    url: cr.pcfae.com
+    provider: harbor
+    path: "{var:org}/{var:repo}"
+    tags:
+      - "v{version}"
+      - "latest"
+    when: { git_tags: [stable], events: [tag] }
+    credentials: HARBOR
+
   # ── Docker Hub: README sync ──────────────────────────────────────
   - id: dockerhub-readme
     kind: docker-readme
