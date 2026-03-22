@@ -146,13 +146,12 @@ Named build artifacts. Each build has a unique ID referenced by targets. Current
 | `paths` | `cache.watch.paths` | []string | Yes | — | Glob patterns for files to watch for changes. |
 | `invalidates` | `cache.watch.invalidates` | []string | Yes | — | Build stage names invalidated when watched files change. |
 | `auto_detect` | `cache.auto_detect` | bool | Yes | true | Auto-detect cache-relevant files from Dockerfile COPY/ADD instructions. |
-| `language` | `language` | string | No | — | string value |
-| `entry` | `entry` | string | No | — | string value |
-| `binary_name` | `binary_name` | string | No | — | string value |
+| `builder` | `builder` | string | No | — | string value |
+| `command` | `command` | string | No | — | string value |
+| `from` | `from` | string | No | — | string value |
 | `output` | `output` | string | No | — | string value |
-| `ldflags` | `ldflags` | []string | No | — | []string value |
+| `args` | `args` | []string | No | — | []string value |
 | `env` | `env` | map[string]string | No | — | map[string]string value |
-| `strip` | `strip` | bool | No | — | bool value |
 | `compress` | `compress` | bool | No | — | bool value |
 | `toolchain_image` | `crucible.toolchain_image` | string | No | — | string value |
 
@@ -193,7 +192,7 @@ Distribution targets and side-effects. Each target has a `kind` that determines 
 | `url` | `url` | string | No | — | Registry or forge hostname. |
 | `provider` | `provider` | string | No | — | Vendor type for auth and API behavior. Auto-detected from URL if omitted on registry/docker-readme targets. |
 | `path` | `path` | string | No | — | Image path within the registry. |
-| `credentials` | `credentials` | string | No | — | Env var prefix for authentication. `{PREFIX}_USER` for username. Secret resolved in order: `{PREFIX}_TOKEN` (preferred) → `{PREFIX}_PASS` → `{PREFIX}_PASSWORD`. Using `_PASS` or `_PASSWORD` emits a warning. See [Registry Credentials](../Docker.md#registry-credentials). |
+| `credentials` | `credentials` | string | No | — | Env var prefix for authentication. Resolution: try `{PREFIX}_TOKEN` first, else `{PREFIX}_USER` + `{PREFIX}_PASS`. |
 | `description` | `description` | string | No | — | string value |
 | `keep_last` | `retention.keep_last` | int | Yes | — | Keep the N most recent tags/releases. |
 | `keep_daily` | `retention.keep_daily` | int | Yes | — | Keep one per day for the last N days. |
@@ -202,6 +201,7 @@ Distribution targets and side-effects. Each target has a `kind` that determines 
 | `keep_yearly` | `retention.keep_yearly` | int | Yes | — | Keep one per year for the last N years. |
 | `protect` | `retention.protect` | []string | Yes | — | Tag patterns that are never deleted. |
 | `tags` | `tags` | []string | No | — | Tag templates resolved against version info. `kind: registry` only. |
+| `native_scan` | `native_scan` | bool | No | — | bool value |
 | `file` | `file` | string | No | — | Path to the README file. `kind: docker-readme` only. |
 | `link_base` | `link_base` | string | No | — | Base URL for relative link rewriting. `kind: docker-readme` only. |
 | `spec_files` | `spec_files` | []string | No | — | Component spec file paths. `kind: gitlab-component` only. |

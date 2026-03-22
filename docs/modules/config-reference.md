@@ -129,13 +129,12 @@ Named build artifacts. Each build has a unique ID referenced by targets. Current
 | `paths` | `cache.watch.paths` | []string | Yes | — | Glob patterns for files to watch for changes. |
 | `invalidates` | `cache.watch.invalidates` | []string | Yes | — | Build stage names invalidated when watched files change. |
 | `auto_detect` | `cache.auto_detect` | bool | Yes | true | Auto-detect cache-relevant files from Dockerfile COPY/ADD instructions. |
-| `language` | `language` | string | No | — | string value |
-| `entry` | `entry` | string | No | — | string value |
-| `binary_name` | `binary_name` | string | No | — | string value |
+| `builder` | `builder` | string | No | — | string value |
+| `command` | `command` | string | No | — | string value |
+| `from` | `from` | string | No | — | string value |
 | `output` | `output` | string | No | — | string value |
-| `ldflags` | `ldflags` | []string | No | — | []string value |
+| `args` | `args` | []string | No | — | []string value |
 | `env` | `env` | map[string]string | No | — | map[string]string value |
-| `strip` | `strip` | bool | No | — | bool value |
 | `compress` | `compress` | bool | No | — | bool value |
 | `toolchain_image` | `crucible.toolchain_image` | string | No | — | string value |
 
@@ -185,6 +184,7 @@ Distribution targets and side-effects. Each target has a `kind` that determines 
 | `keep_yearly` | `retention.keep_yearly` | int | Yes | — | Keep one per year for the last N years. |
 | `protect` | `retention.protect` | []string | Yes | — | Tag patterns that are never deleted. |
 | `tags` | `tags` | []string | No | — | Tag templates resolved against version info. `kind: registry` only. |
+| `native_scan` | `native_scan` | bool | No | — | bool value |
 | `file` | `file` | string | No | — | Path to the README file. `kind: docker-readme` only. |
 | `link_base` | `link_base` | string | No | — | Base URL for relative link rewriting. `kind: docker-readme` only. |
 | `spec_files` | `spec_files` | []string | No | — | Component spec file paths. `kind: gitlab-component` only. |
