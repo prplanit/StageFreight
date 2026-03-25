@@ -3,6 +3,8 @@
 package release
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -81,16 +83,17 @@ type BinaryRow struct {
 
 // NotesInput holds all data needed to render release notes.
 type NotesInput struct {
-	RepoDir      string // git repository directory
-	FromRef      string // start ref (empty = auto-detect previous tag)
-	ToRef        string // end ref (default: HEAD)
-	SecurityTile string // one-line status (e.g., "🛡️ ✅ **Passed** — no vulnerabilities")
-	SecurityBody string // full section: status line + optional <details> CVE block
-	TagMessage   string // annotated tag message (optional, auto-detected if empty)
-	ProjectName  string // project name (auto-detected if empty)
-	Version      string // version string (auto-detected if empty)
-	SHA          string // short commit hash (auto-detected if empty)
-	IsPrerelease bool   // true if version has prerelease suffix
+	RepoDir      string   // git repository directory
+	FromRef      string   // start ref (empty = auto-detect previous tag)
+	ToRef        string   // end ref (default: HEAD)
+	TagPatterns  []string // regex patterns for release tags (from policies.git_tags)
+	SecurityTile string   // one-line status (e.g., "🛡️ ✅ **Passed** — no vulnerabilities")
+	SecurityBody string   // full section: status line + optional <details> CVE block
+	TagMessage   string   // annotated tag message (optional, auto-detected if empty)
+	ProjectName  string   // project name (auto-detected if empty)
+	Version      string   // version string (auto-detected if empty)
+	SHA          string   // short commit hash (auto-detected if empty)
+	IsPrerelease bool     // true if version has prerelease suffix
 	Images       []ImageRow  // resolved registry image rows for availability table
 	Downloads    []BinaryRow // binary/archive artifacts for downloads table
 }
@@ -103,7 +106,7 @@ func GenerateNotes(input NotesInput) (string, error) {
 
 	// Find previous tag if not specified
 	if input.FromRef == "" {
-		prev, err := previousTag(input.RepoDir, input.ToRef)
+		prev, err := previousReleaseTag(input.RepoDir, input.ToRef, input.TagPatterns)
 		if err != nil || prev == "" {
 			input.FromRef = ""
 		} else {
@@ -152,14 +155,148 @@ func GenerateNotes(input NotesInput) (string, error) {
 	return renderNotes(input, categories, commits), nil
 }
 
-func previousTag(repoDir, currentRef string) (string, error) {
-	cmd := exec.Command("git", "describe", "--tags", "--abbrev=0", currentRef+"^")
-	cmd.Dir = repoDir
-	out, err := cmd.Output()
+// previousReleaseTag finds the most recent release tag that is an ancestor of
+// currentRef and matches the configured tag patterns. It replaces the naive
+// git-describe approach which matched any tag (including rolling aliases like
+// "latest" or bare-version aliases like "0.1.0").
+func previousReleaseTag(repoDir, currentRef string, tagPatterns []string) (string, error) {
+	currentVersion := normalizeReleaseVersion(currentRef)
+
+	matchers, err := compileReleaseTagMatchers(tagPatterns)
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(string(out)), nil
+
+	tags, err := listTagsByVersion(repoDir)
+	if err != nil {
+		return "", err
+	}
+
+	for _, tag := range tags {
+		if !matchesAnyTagPattern(tag, matchers) {
+			continue
+		}
+
+		// Do not treat same-version aliases as the "previous" release.
+		// Example: currentRef=v0.1.0, stale alias tag=0.1.0
+		if normalizeReleaseVersion(tag) == currentVersion {
+			continue
+		}
+
+		ok, err := isAncestor(repoDir, tag, currentRef)
+		if err != nil {
+			return "", err
+		}
+		if !ok {
+			continue
+		}
+
+		return tag, nil
+	}
+
+	return "", nil
+}
+
+// compileReleaseTagMatchers compiles tag patterns into regex matchers.
+// Falls back to a default semver pattern when no patterns are provided.
+func compileReleaseTagMatchers(patterns []string) ([]*regexp.Regexp, error) {
+	if len(patterns) == 0 {
+		patterns = []string{`^v?\d+\.\d+\.\d+$`}
+	}
+
+	matchers := make([]*regexp.Regexp, 0, len(patterns))
+	for _, pattern := range patterns {
+		pattern = strings.TrimSpace(pattern)
+		if pattern == "" {
+			continue
+		}
+		re, err := regexp.Compile(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("compile release tag pattern %q: %w", pattern, err)
+		}
+		matchers = append(matchers, re)
+	}
+
+	if len(matchers) == 0 {
+		re, err := regexp.Compile(`^v?\d+\.\d+\.\d+$`)
+		if err != nil {
+			return nil, fmt.Errorf("compile default release tag pattern: %w", err)
+		}
+		matchers = append(matchers, re)
+	}
+
+	return matchers, nil
+}
+
+// matchesAnyTagPattern returns true if the tag matches at least one pattern.
+func matchesAnyTagPattern(tag string, matchers []*regexp.Regexp) bool {
+	for _, re := range matchers {
+		if re.MatchString(tag) {
+			return true
+		}
+	}
+	return false
+}
+
+// normalizeReleaseVersion strips refs/tags/ prefix and optional v-prefix
+// for same-version comparison.
+func normalizeReleaseVersion(ref string) string {
+	ref = strings.TrimSpace(ref)
+	ref = strings.TrimPrefix(ref, "refs/tags/")
+	ref = strings.TrimPrefix(ref, "v")
+	return ref
+}
+
+// listTagsByVersion returns all git tags sorted by version descending.
+// Git's --sort=-version:refname is authoritative; no secondary Go-side sort.
+func listTagsByVersion(repoDir string) ([]string, error) {
+	out, err := runGit(repoDir, "tag", "-l", "--sort=-version:refname")
+	if err != nil {
+		return nil, fmt.Errorf("list tags by version: %w", err)
+	}
+
+	var tags []string
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		tag := strings.TrimSpace(line)
+		if tag == "" {
+			continue
+		}
+		tags = append(tags, tag)
+	}
+	return tags, nil
+}
+
+// isAncestor returns true if ancestorRef is an ancestor of descendantRef.
+func isAncestor(repoDir, ancestorRef, descendantRef string) (bool, error) {
+	cmd := exec.Command("git", "merge-base", "--is-ancestor", ancestorRef, descendantRef)
+	cmd.Dir = repoDir
+	err := cmd.Run()
+	if err == nil {
+		return true, nil
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+		return false, nil
+	}
+	return false, fmt.Errorf("check ancestry %q -> %q: %w", ancestorRef, descendantRef, err)
+}
+
+// runGit executes a git command and returns its stdout.
+func runGit(repoDir string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = repoDir
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if msg != "" {
+			return "", fmt.Errorf("git %s: %s: %w", strings.Join(args, " "), msg, err)
+		}
+		return "", fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
+	}
+	return stdout.String(), nil
 }
 
 // tagMessage extracts the annotation message from an annotated tag.

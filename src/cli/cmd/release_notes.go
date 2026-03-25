@@ -47,10 +47,17 @@ func runReleaseNotes(cmd *cobra.Command, args []string) error {
 		rootDir = args[0]
 	}
 
+	// Collect release tag patterns from policies
+	var tagPatterns []string
+	for _, p := range cfg.Policies.GitTags {
+		tagPatterns = append(tagPatterns, p)
+	}
+
 	input := release.NotesInput{
-		RepoDir: rootDir,
-		FromRef: rnFrom,
-		ToRef:   rnTo,
+		RepoDir:     rootDir,
+		FromRef:     rnFrom,
+		ToRef:       rnTo,
+		TagPatterns: tagPatterns,
 	}
 
 	// Load security summary from file if provided

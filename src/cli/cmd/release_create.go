@@ -366,9 +366,16 @@ func RunReleaseCreate(req ReleaseCreateRequest) error {
 		if len(sha) > 8 {
 			sha = sha[:8]
 		}
+		// Collect release tag patterns from policies
+		var tagPatterns []string
+		for _, p := range req.Config.Policies.GitTags {
+			tagPatterns = append(tagPatterns, p)
+		}
+
 		input := release.NotesInput{
 			RepoDir:      rootDir,
 			ToRef:        tag,
+			TagPatterns:  tagPatterns,
 			SecurityTile: secTile,
 			SecurityBody: secBody,
 			Version:      versionInfo.Version,
