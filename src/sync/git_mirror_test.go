@@ -58,7 +58,7 @@ func TestMirrorPush_Success(t *testing.T) {
 	remote := setupBareRemote(t)
 
 	// Use file:// URL so no credentials needed
-	acc := config.AccessoryConfig{
+	acc := config.MirrorConfig{
 		ID:       "test-remote",
 		Provider: "gitea",
 		URL:      "file://" + remote,
@@ -238,7 +238,7 @@ func TestBuildAuthURL(t *testing.T) {
 	os.Setenv("TEST_TOKEN", "ghp_testtoken123")
 	defer os.Unsetenv("TEST_TOKEN")
 
-	acc := config.AccessoryConfig{
+	acc := config.MirrorConfig{
 		ID:          "github",
 		Provider:    "github",
 		URL:         "https://github.com",
@@ -264,7 +264,7 @@ func TestBuildAuthURL_NoCredentials(t *testing.T) {
 	os.Unsetenv("EMPTY_PASS")
 	os.Unsetenv("EMPTY_PASSWORD")
 
-	acc := config.AccessoryConfig{
+	acc := config.MirrorConfig{
 		ID:          "github",
 		Credentials: "EMPTY",
 	}

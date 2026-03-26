@@ -23,7 +23,7 @@ import (
 //   - Never mutates the user's working repo (temp bare clone only)
 //   - Credentials are never logged, persisted, or surfaced in errors
 //   - Process is killed on context cancellation
-func MirrorPush(ctx context.Context, worktree string, accessory config.AccessoryConfig) (*MirrorResult, error) {
+func MirrorPush(ctx context.Context, worktree string, accessory config.MirrorConfig) (*MirrorResult, error) {
 	start := time.Now()
 	result := &MirrorResult{
 		AccessoryID: accessory.ID,
@@ -95,7 +95,7 @@ func MirrorPush(ctx context.Context, worktree string, accessory config.Accessory
 
 // buildAuthURL constructs an HTTPS URL with embedded token for git push.
 // The URL is internal only — it must never be logged or surfaced.
-func buildAuthURL(accessory config.AccessoryConfig) (string, error) {
+func buildAuthURL(accessory config.MirrorConfig) (string, error) {
 	creds := credentials.ResolvePrefix(accessory.Credentials)
 
 	token := creds.Secret

@@ -1,11 +1,11 @@
 package config
 
-// SourcesConfig holds the build source definitions and accessory forge declarations.
-// The primary source is the authoritative forge. Accessories are derived mirrors
-// synchronized outward from the primary.
+// SourcesConfig holds the build source definitions and mirror forge declarations.
+// The primary source is the authoritative forge. Mirrors are strict downstream
+// replicas synchronized outward from the primary.
 type SourcesConfig struct {
-	Primary     SourceConfig      `yaml:"primary"`
-	Accessories []AccessoryConfig `yaml:"accessories,omitempty"`
+	Primary SourceConfig   `yaml:"primary"`
+	Mirrors []MirrorConfig `yaml:"mirrors,omitempty"`
 }
 
 // SourceConfig defines the primary (authoritative) build source.
@@ -16,14 +16,14 @@ type SourceConfig struct {
 	DefaultBranch string `yaml:"default_branch"` // optional: used with URL for raw_base derivation
 }
 
-// AccessoryConfig declares a derived forge that receives projections from the primary.
-// An accessory is a strict mirror — it never originates state. Directionality is
-// enforced: source → accessory only.
-type AccessoryConfig struct {
+// MirrorConfig declares a downstream forge replica that receives projections
+// from the primary. A mirror is strict — it never originates state.
+// Directionality is enforced: source → mirror only.
+type MirrorConfig struct {
 	ID          string     `yaml:"id"`          // unique identifier (e.g., "github")
 	Provider    string     `yaml:"provider"`    // forge provider: github, gitlab, gitea
 	URL         string     `yaml:"url"`         // forge base URL (e.g., "https://github.com")
-	ProjectID   string     `yaml:"project_id"`  // owner/repo or numeric ID on the accessory forge
+	ProjectID   string     `yaml:"project_id"`  // owner/repo or numeric ID on the mirror forge
 	Credentials string     `yaml:"credentials"` // env var prefix for token resolution
 	Sync        SyncConfig `yaml:"sync"`        // which domains to synchronize
 }

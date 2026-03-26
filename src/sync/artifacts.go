@@ -26,7 +26,7 @@ type ReleaseData struct {
 //
 // Artifact sync must never mutate repository content (files, refs).
 // Only forge-native surfaces.
-func SyncRelease(ctx context.Context, accessory config.AccessoryConfig, data ReleaseData) *ReleaseResult {
+func SyncRelease(ctx context.Context, accessory config.MirrorConfig, data ReleaseData) *ReleaseResult {
 	result := &ReleaseResult{
 		AccessoryID: accessory.ID,
 	}

@@ -31,50 +31,50 @@ func Validate(cfg *Config) (warnings []string, err error) {
 		}
 	}
 
-	// ── Source Accessories ────────────────────────────────────────────────
+	// ── Source Mirrors ───────────────────────────────────────────────────
 
-	accessoryIDs := make(map[string]bool)
+	mirrorIDs := make(map[string]bool)
 	validProviders := map[string]bool{"github": true, "gitlab": true, "gitea": true}
-	for i, acc := range cfg.Sources.Accessories {
-		apath := fmt.Sprintf("sources.accessories[%d]", i)
+	for i, m := range cfg.Sources.Mirrors {
+		mpath := fmt.Sprintf("sources.mirrors[%d]", i)
 
-		if acc.ID == "" {
-			errs = append(errs, fmt.Sprintf("%s: id is required", apath))
-		} else if accessoryIDs[acc.ID] {
-			errs = append(errs, fmt.Sprintf("%s: duplicate accessory id %q", apath, acc.ID))
+		if m.ID == "" {
+			errs = append(errs, fmt.Sprintf("%s: id is required", mpath))
+		} else if mirrorIDs[m.ID] {
+			errs = append(errs, fmt.Sprintf("%s: duplicate mirror id %q", mpath, m.ID))
 		} else {
-			accessoryIDs[acc.ID] = true
+			mirrorIDs[m.ID] = true
 		}
 
-		if acc.Provider == "" {
-			errs = append(errs, fmt.Sprintf("%s: provider is required", apath))
-		} else if !validProviders[acc.Provider] {
-			errs = append(errs, fmt.Sprintf("%s: unknown provider %q (supported: github, gitlab, gitea)", apath, acc.Provider))
+		if m.Provider == "" {
+			errs = append(errs, fmt.Sprintf("%s: provider is required", mpath))
+		} else if !validProviders[m.Provider] {
+			errs = append(errs, fmt.Sprintf("%s: unknown provider %q (supported: github, gitlab, gitea)", mpath, m.Provider))
 		}
 
-		if acc.URL == "" {
-			errs = append(errs, fmt.Sprintf("%s: url is required", apath))
+		if m.URL == "" {
+			errs = append(errs, fmt.Sprintf("%s: url is required", mpath))
 		}
-		if acc.ProjectID == "" {
-			errs = append(errs, fmt.Sprintf("%s: project_id is required", apath))
+		if m.ProjectID == "" {
+			errs = append(errs, fmt.Sprintf("%s: project_id is required", mpath))
 		}
-		if acc.Credentials == "" {
-			errs = append(errs, fmt.Sprintf("%s: credentials is required", apath))
+		if m.Credentials == "" {
+			errs = append(errs, fmt.Sprintf("%s: credentials is required", mpath))
 		}
 
 		// At least one sync domain must be enabled
-		if !acc.Sync.Git && !acc.Sync.Releases && !acc.Sync.Docs {
-			errs = append(errs, fmt.Sprintf("%s: at least one sync domain must be enabled (git, releases, docs)", apath))
+		if !m.Sync.Git && !m.Sync.Releases && !m.Sync.Docs {
+			errs = append(errs, fmt.Sprintf("%s: at least one sync domain must be enabled (git, releases, docs)", mpath))
 		}
 
 		// git + docs is mutually exclusive — docs arrive through git mirror
-		if acc.Sync.Git && acc.Sync.Docs {
-			errs = append(errs, fmt.Sprintf("%s: sync.git and sync.docs are mutually exclusive (docs arrive through git mirror)", apath))
+		if m.Sync.Git && m.Sync.Docs {
+			errs = append(errs, fmt.Sprintf("%s: sync.git and sync.docs are mutually exclusive (docs arrive through git mirror)", mpath))
 		}
 
 		// releases without git — warn, don't error
-		if acc.Sync.Releases && !acc.Sync.Git {
-			warnings = append(warnings, fmt.Sprintf("%s: sync.releases without sync.git — release projection does not guarantee referenced commits exist on accessory", apath))
+		if m.Sync.Releases && !m.Sync.Git {
+			warnings = append(warnings, fmt.Sprintf("%s: sync.releases without sync.git — release projection does not guarantee referenced commits exist on mirror", mpath))
 		}
 	}
 

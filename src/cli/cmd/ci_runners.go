@@ -521,7 +521,7 @@ func docsRunner(ctx context.Context, appCfg *config.Config, ciCtx *ci.CIContext,
 
 	// Sync accessories (git mirror on push events — no release data).
 	// Mirror push is idempotent — safe even when no repo mutation occurred.
-	syncAccessories(ctx, appCfg, nil)
+	syncMirrors(ctx, appCfg, nil)
 
 	return nil
 }
@@ -611,7 +611,7 @@ func releaseRunner(ctx context.Context, appCfg *config.Config, ciCtx *ci.CIConte
 	// Release projection is NOT wired here yet — full release data
 	// (notes, assets, links) must be passed from RunReleaseCreate.
 	// TODO: plumb release data from RunReleaseCreate into sync.
-	syncAccessories(ctx, appCfg, nil)
+	syncMirrors(ctx, appCfg, nil)
 
 	return nil
 }
@@ -640,16 +640,16 @@ func releaseTagMatchesAnyTarget(appCfg *config.Config, tag string) bool {
 	return !hasConstraints
 }
 
-// ── accessory sync ──────────────────────────────────────────────────────────
+// ── mirror sync ─────────────────────────────────────────────────────────────
 
-// syncAccessories runs per-accessory sync: git mirror first, then artifact
-// projection gated on mirror success. Strictly sequential per accessory.
+// syncMirrors runs per-mirror sync: git mirror first, then artifact
+// projection gated on mirror success. Strictly sequential per mirror.
 //
 // releaseData is optional — nil means no release projection for this run.
 // Mirror source is always sources.primary.worktree (resolved to absolute).
 // Mirror push is idempotent — safe to call even when no mutation occurred.
-func syncAccessories(ctx context.Context, appCfg *config.Config, releaseData *stagefreightsync.ReleaseData) {
-	if len(appCfg.Sources.Accessories) == 0 {
+func syncMirrors(ctx context.Context, appCfg *config.Config, releaseData *stagefreightsync.ReleaseData) {
+	if len(appCfg.Sources.Mirrors) == 0 {
 		return
 	}
 
@@ -661,48 +661,48 @@ func syncAccessories(ctx context.Context, appCfg *config.Config, releaseData *st
 
 	hasDegraded := false
 
-	for _, acc := range appCfg.Sources.Accessories {
+	for _, m := range appCfg.Sources.Mirrors {
 		// 1. Git mirror (if enabled)
-		if acc.Sync.Git {
-			result, err := stagefreightsync.MirrorPush(ctx, worktree, acc)
+		if m.Sync.Git {
+			result, err := stagefreightsync.MirrorPush(ctx, worktree, m)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "  sync: %s: mirror error: %v\n", acc.ID, err)
+				fmt.Fprintf(os.Stderr, "  sync: %s: mirror error: %v\n", m.ID, err)
 				hasDegraded = true
-				continue // skip artifact sync for this accessory
+				continue // skip artifact sync for this mirror
 			}
 
 			if result.Status == stagefreightsync.SyncSuccess {
-				fmt.Printf("  sync: %s: mirror ✓ (%s)\n", acc.ID, result.Duration.Truncate(100*time.Millisecond))
+				fmt.Printf("  sync: %s: mirror ✓ (%s)\n", m.ID, result.Duration.Truncate(100*time.Millisecond))
 			} else {
-				fmt.Fprintf(os.Stderr, "  sync: %s: mirror DEGRADED — %s: %s\n", acc.ID, result.FailureReason, result.Message)
+				fmt.Fprintf(os.Stderr, "  sync: %s: mirror DEGRADED — %s: %s\n", m.ID, result.FailureReason, result.Message)
 				hasDegraded = true
-				// Do NOT proceed to artifact sync for this accessory
+				// Do NOT proceed to artifact sync for this mirror
 				continue
 			}
 		}
 
 		// 2. Release projection (if enabled and data provided)
-		if acc.Sync.Releases && releaseData != nil {
-			result := stagefreightsync.SyncRelease(ctx, acc, *releaseData)
+		if m.Sync.Releases && releaseData != nil {
+			result := stagefreightsync.SyncRelease(ctx, m, *releaseData)
 			if result.Status == stagefreightsync.SyncSuccess {
-				fmt.Printf("  sync: %s: release ✓\n", acc.ID)
+				fmt.Printf("  sync: %s: release ✓\n", m.ID)
 			} else {
-				fmt.Fprintf(os.Stderr, "  sync: %s: release warning — %s\n", acc.ID, result.Message)
+				fmt.Fprintf(os.Stderr, "  sync: %s: release warning — %s\n", m.ID, result.Message)
 			}
 		}
 	}
 
 	if hasDegraded {
-		fmt.Fprintf(os.Stderr, "\n  ⚠ DEGRADED REPLICATION: one or more accessory mirrors failed\n")
+		fmt.Fprintf(os.Stderr, "\n  ⚠ DEGRADED REPLICATION: one or more mirrors failed\n")
 	}
 }
 
-// LegacySyncOverlapsAccessory returns true if a legacy sync target's provider
-// is also declared as an accessory, meaning the accessory should take precedence.
+// LegacySyncOverlapsMirror returns true if a legacy sync target's provider
+// is also declared as a mirror, meaning the mirror should take precedence.
 // Exported for use in release_create.go where legacy sync targets are executed.
-func LegacySyncOverlapsAccessory(targetProvider string, appCfg *config.Config) bool {
-	for _, acc := range appCfg.Sources.Accessories {
-		if acc.Provider == targetProvider {
+func LegacySyncOverlapsMirror(targetProvider string, appCfg *config.Config) bool {
+	for _, m := range appCfg.Sources.Mirrors {
+		if m.Provider == targetProvider {
 			return true
 		}
 	}
