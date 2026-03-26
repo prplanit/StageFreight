@@ -184,6 +184,8 @@ func RenderSection(m *Manifest, section, renderer string, columns []string) (str
 		return RenderKV(data)
 	case "badges":
 		return RenderBadges(data)
+	case "versions":
+		return RenderVersions(data)
 	default:
 		return "", fmt.Errorf("unknown renderer %q", renderer)
 	}
@@ -243,6 +245,83 @@ func shieldsEncode(s string) string {
 		s = strings.ReplaceAll(s, c, fmt.Sprintf("%%%02X", c[0]))
 	}
 	return s
+}
+
+// RenderVersions renders base image inventory items as a clean version table
+// with a "Built from" header line. Source refs are shown only in the header,
+// not as a table column — they are parser evidence, not user documentation.
+func RenderVersions(data interface{}) (string, error) {
+	items, err := toMapSlice(data)
+	if err != nil {
+		return "", fmt.Errorf("versions renderer: %w", err)
+	}
+	if len(items) == 0 {
+		return "No items", nil
+	}
+
+	var b strings.Builder
+
+	// Collect unique source_ref values, preserving first-occurrence order.
+	var refs []string
+	seen := make(map[string]bool)
+	for _, item := range items {
+		ref := formatCell(item["source_ref"])
+		if ref == "" {
+			continue
+		}
+		if !seen[ref] {
+			seen[ref] = true
+			refs = append(refs, ref)
+		}
+	}
+
+	// Render "Built from" header if any refs exist.
+	if len(refs) > 0 {
+		b.WriteString("Built from ")
+		for i, ref := range refs {
+			// Strip a leading `FROM ` prefix only.
+			display := strings.TrimPrefix(ref, "FROM ")
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			b.WriteString("`")
+			b.WriteString(display)
+			b.WriteString("`")
+		}
+		b.WriteString(".\n\n")
+	}
+
+	// Detect whether any item has a non-empty stage field.
+	hasStage := false
+	for _, item := range items {
+		if s := formatCell(item["stage"]); s != "" {
+			hasStage = true
+			break
+		}
+	}
+
+	// Build table header.
+	if hasStage {
+		b.WriteString("| Name | Version | Stage |\n")
+		b.WriteString("| --- | --- | --- |\n")
+	} else {
+		b.WriteString("| Name | Version |\n")
+		b.WriteString("| --- | --- |\n")
+	}
+
+	// Build table rows.
+	for _, item := range items {
+		name := formatCell(item["name"])
+		version := formatCell(item["version"])
+		if hasStage {
+			stage := formatCell(item["stage"])
+			b.WriteString(fmt.Sprintf("| %s | %s | %s |\n", name, version, stage))
+		} else {
+			b.WriteString(fmt.Sprintf("| %s | %s |\n", name, version))
+		}
+	}
+
+	return strings.TrimRight(b.String(), "\n"), nil
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────

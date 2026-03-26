@@ -349,6 +349,8 @@ func buildModulesV2(appCfg *config.Config, items []config.NarratorItem, linkBase
 					Section:  item.Section,
 					Renderer: item.Renderer,
 					Columns:  item.Columns,
+					Wrap:     item.Wrap,
+					Summary:  item.Summary,
 				})
 			}
 

@@ -515,13 +515,20 @@ func validateNarratorItem(item NarratorItem, path string) []string {
 		}
 		if item.Renderer == "" {
 			errs = append(errs, fmt.Sprintf("%s: kind build-contents requires renderer (table, list, or kv)", path))
-		} else if item.Renderer != "table" && item.Renderer != "list" && item.Renderer != "kv" && item.Renderer != "badges" {
-			errs = append(errs, fmt.Sprintf("%s: unknown renderer %q (supported: table, list, kv, badges)", path, item.Renderer))
+		} else if item.Renderer != "table" && item.Renderer != "list" && item.Renderer != "kv" && item.Renderer != "badges" && item.Renderer != "versions" {
+			errs = append(errs, fmt.Sprintf("%s: unknown renderer %q (supported: table, list, kv, badges, versions)", path, item.Renderer))
 		}
 		if item.OutputFile != "" {
 			if pathErrs := validateOutputPath(item.OutputFile, path+".output_file"); len(pathErrs) > 0 {
 				errs = append(errs, pathErrs...)
 			}
+		}
+		// Wrap validation
+		if item.Wrap != "" && item.Wrap != "details" {
+			errs = append(errs, fmt.Sprintf("%s: unknown wrap value %q (supported: details)", path, item.Wrap))
+		}
+		if item.Wrap == "details" && item.Summary == "" {
+			errs = append(errs, fmt.Sprintf("%s: summary is required when wrap=details", path))
 		}
 		// build-contents can work with either placement (section embedding) or output_file, or both
 		// but needs at least one destination

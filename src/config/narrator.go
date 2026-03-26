@@ -91,6 +91,13 @@ type NarratorItem struct {
 	// Can be used alongside placement (section embedding) or alone.
 	OutputFile string `yaml:"output_file,omitempty"`
 
+	// Wrap wraps the rendered output in a container element (kind: build-contents).
+	// Supported: "details" (wraps in <details>/<summary>).
+	Wrap string `yaml:"wrap,omitempty"`
+
+	// Summary is the summary text when wrap=details (required when wrap is set).
+	Summary string `yaml:"summary,omitempty"`
+
 	// ── kind: props ──────────────────────────────────────────────────────
 
 	// Type is the props resolver type ID (kind: props).
