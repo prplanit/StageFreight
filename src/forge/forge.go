@@ -8,7 +8,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
+
+	"github.com/PrPlanIT/StageFreight/src/credentials"
 )
 
 // ErrBranchMoved is returned when the target branch has moved since the expected SHA.
@@ -179,4 +182,68 @@ type ReleaseInfo struct {
 	ID        string    // platform-specific ID (numeric for GitHub/Gitea, tag_name for GitLab)
 	TagName   string
 	CreatedAt time.Time
+}
+
+// NewFromAccessory creates a forge client from an accessory config.
+// This is a config adapter only — no orchestration or sync logic.
+// Uses credentials.ResolvePrefix for token resolution — same model as
+// the mirror layer and all other StageFreight credential consumers.
+func NewFromAccessory(provider, baseURL, projectID, credPrefix string) (Forge, error) {
+	creds := credentials.ResolvePrefix(credPrefix)
+	token := creds.Secret
+	if token == "" {
+		return nil, fmt.Errorf("accessory: no secret resolved for credentials prefix %q", credPrefix)
+	}
+
+	switch Provider(provider) {
+	case GitLab:
+		gl := NewGitLab(baseURL)
+		gl.Token = token
+		if projectID != "" {
+			gl.ProjectID = projectID
+		}
+		return gl, nil
+	case GitHub:
+		gh := NewGitHub(baseURL)
+		gh.Token = token
+		if projectID != "" {
+			owner, repo, err := splitOwnerRepo(projectID)
+			if err != nil {
+				return nil, fmt.Errorf("accessory %s (%s): %w", provider, projectID, err)
+			}
+			gh.Owner = owner
+			gh.Repo = repo
+		}
+		return gh, nil
+	case Gitea:
+		gt := NewGitea(baseURL)
+		gt.Token = token
+		if projectID != "" {
+			owner, repo, err := splitOwnerRepo(projectID)
+			if err != nil {
+				return nil, fmt.Errorf("accessory %s (%s): %w", provider, projectID, err)
+			}
+			gt.Owner = owner
+			gt.Repo = repo
+		}
+		return gt, nil
+	default:
+		return nil, fmt.Errorf("accessory: unknown provider %q", provider)
+	}
+}
+
+// splitOwnerRepo splits "owner/repo" into (owner, repo).
+// Returns an error if the input is not a valid owner/repo pair.
+func splitOwnerRepo(path string) (string, string, error) {
+	idx := strings.IndexByte(path, '/')
+	if idx <= 0 || idx == len(path)-1 {
+		return "", "", fmt.Errorf("invalid project_id %q: expected owner/repo format", path)
+	}
+	owner := path[:idx]
+	repo := path[idx+1:]
+	// Strip any trailing path segments (e.g., "owner/repo/extra")
+	if slash := strings.IndexByte(repo, '/'); slash >= 0 {
+		repo = repo[:slash]
+	}
+	return owner, repo, nil
 }

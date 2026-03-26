@@ -31,6 +31,53 @@ func Validate(cfg *Config) (warnings []string, err error) {
 		}
 	}
 
+	// ── Source Accessories ────────────────────────────────────────────────
+
+	accessoryIDs := make(map[string]bool)
+	validProviders := map[string]bool{"github": true, "gitlab": true, "gitea": true}
+	for i, acc := range cfg.Sources.Accessories {
+		apath := fmt.Sprintf("sources.accessories[%d]", i)
+
+		if acc.ID == "" {
+			errs = append(errs, fmt.Sprintf("%s: id is required", apath))
+		} else if accessoryIDs[acc.ID] {
+			errs = append(errs, fmt.Sprintf("%s: duplicate accessory id %q", apath, acc.ID))
+		} else {
+			accessoryIDs[acc.ID] = true
+		}
+
+		if acc.Provider == "" {
+			errs = append(errs, fmt.Sprintf("%s: provider is required", apath))
+		} else if !validProviders[acc.Provider] {
+			errs = append(errs, fmt.Sprintf("%s: unknown provider %q (supported: github, gitlab, gitea)", apath, acc.Provider))
+		}
+
+		if acc.URL == "" {
+			errs = append(errs, fmt.Sprintf("%s: url is required", apath))
+		}
+		if acc.ProjectID == "" {
+			errs = append(errs, fmt.Sprintf("%s: project_id is required", apath))
+		}
+		if acc.Credentials == "" {
+			errs = append(errs, fmt.Sprintf("%s: credentials is required", apath))
+		}
+
+		// At least one sync domain must be enabled
+		if !acc.Sync.Git && !acc.Sync.Releases && !acc.Sync.Docs {
+			errs = append(errs, fmt.Sprintf("%s: at least one sync domain must be enabled (git, releases, docs)", apath))
+		}
+
+		// git + docs is mutually exclusive — docs arrive through git mirror
+		if acc.Sync.Git && acc.Sync.Docs {
+			errs = append(errs, fmt.Sprintf("%s: sync.git and sync.docs are mutually exclusive (docs arrive through git mirror)", apath))
+		}
+
+		// releases without git — warn, don't error
+		if acc.Sync.Releases && !acc.Sync.Git {
+			warnings = append(warnings, fmt.Sprintf("%s: sync.releases without sync.git — release projection does not guarantee referenced commits exist on accessory", apath))
+		}
+	}
+
 	// ── Builds ────────────────────────────────────────────────────────────
 
 	buildIDs := make(map[string]bool)
