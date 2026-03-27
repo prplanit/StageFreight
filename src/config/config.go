@@ -61,6 +61,16 @@ type Config struct {
 
 	// Release holds configuration for the release subsystem.
 	Release ReleaseConfig `yaml:"release"`
+
+	// Glossary defines the repo's shared change-language model.
+	// Consumed by commit authoring, tag planning, and release rendering.
+	Glossary GlossaryConfig `yaml:"glossary"`
+
+	// Presentation defines surface-specific rendering policies.
+	Presentation PresentationConfig `yaml:"presentation"`
+
+	// Tag holds workflow defaults for the tag planner.
+	Tag TagConfig `yaml:"tag"`
 }
 
 // Load reads configuration from a YAML file.
@@ -113,7 +123,10 @@ func defaults() *Config {
 		Commit:     DefaultCommitConfig(),
 		Dependency: DefaultDependencyConfig(),
 		Docs:       DefaultDocsConfig(),
-		Manifest:   DefaultManifestConfig(),
-		Release:    DefaultReleaseConfig(),
+		Manifest:     DefaultManifestConfig(),
+		Release:      DefaultReleaseConfig(),
+		Glossary:     DefaultGlossaryConfig(),
+		Presentation: DefaultPresentationConfig(),
+		Tag:          DefaultTagConfig(),
 	}
 }

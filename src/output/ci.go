@@ -18,6 +18,15 @@ func IsCI() bool {
 	return os.Getenv("CI") == "true"
 }
 
+// IsTTY returns true if stdout is connected to a terminal.
+func IsTTY() bool {
+	fi, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
+}
+
 func IsGitLabCI() bool {
 	return os.Getenv("GITLAB_CI") == "true"
 }

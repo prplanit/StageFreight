@@ -58,7 +58,7 @@ func TestPreviousReleaseTag_SkipsLatest(t *testing.T) {
 		3: {"v0.1.0"},
 	})
 
-	got, err := previousReleaseTag(repo, "v0.1.0", []string{`^v?\d+\.\d+\.\d+$`})
+	got, err := PreviousReleaseTag(repo, "v0.1.0", []string{`^v?\d+\.\d+\.\d+$`})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestPreviousReleaseTag_SkipsSameVersionAlias(t *testing.T) {
 		3: {"v0.1.0"},
 	})
 
-	got, err := previousReleaseTag(repo, "v0.1.0", []string{`^v?\d+\.\d+\.\d+$`})
+	got, err := PreviousReleaseTag(repo, "v0.1.0", []string{`^v?\d+\.\d+\.\d+$`})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestPreviousReleaseTag_SkipsSameCommitAlias(t *testing.T) {
 		2: {"v0.1.0", "0.1.0", "latest"},
 	})
 
-	got, err := previousReleaseTag(repo, "v0.1.0", []string{`^v?\d+\.\d+\.\d+$`})
+	got, err := PreviousReleaseTag(repo, "v0.1.0", []string{`^v?\d+\.\d+\.\d+$`})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestPreviousReleaseTag_DefaultPatternFallback(t *testing.T) {
 		3: {"v0.1.0"},
 	})
 
-	got, err := previousReleaseTag(repo, "v0.1.0", nil)
+	got, err := PreviousReleaseTag(repo, "v0.1.0", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +128,7 @@ func TestPreviousReleaseTag_PatternExcludesBareVersion(t *testing.T) {
 		3: {"v0.2.0"},
 	})
 
-	got, err := previousReleaseTag(repo, "v0.2.0", []string{`^v\d+\.\d+\.\d+$`})
+	got, err := PreviousReleaseTag(repo, "v0.2.0", []string{`^v\d+\.\d+\.\d+$`})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +179,7 @@ func TestPreviousReleaseTag_NonAncestorSkipped(t *testing.T) {
 	git("tag", "v0.1.0")
 
 	// v0.9.0 exists but is NOT an ancestor of v0.1.0
-	got, err := previousReleaseTag(dir, "v0.1.0", []string{`^v?\d+\.\d+\.\d+$`})
+	got, err := PreviousReleaseTag(dir, "v0.1.0", []string{`^v?\d+\.\d+\.\d+$`})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +194,7 @@ func TestPreviousReleaseTag_NoPreviousTag(t *testing.T) {
 		1: {"v0.1.0"},
 	})
 
-	got, err := previousReleaseTag(repo, "v0.1.0", []string{`^v?\d+\.\d+\.\d+$`})
+	got, err := PreviousReleaseTag(repo, "v0.1.0", []string{`^v?\d+\.\d+\.\d+$`})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +212,7 @@ func TestPreviousReleaseTag_BareCurrentRef(t *testing.T) {
 		3: {"0.1.0"},
 	})
 
-	got, err := previousReleaseTag(repo, "0.1.0", []string{`^v?\d+\.\d+\.\d+$`})
+	got, err := PreviousReleaseTag(repo, "0.1.0", []string{`^v?\d+\.\d+\.\d+$`})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,7 +234,7 @@ func TestPreviousReleaseTag_PrereleaseIncluded(t *testing.T) {
 		`^v?\d+\.\d+\.\d+-.+`,
 	}
 
-	got, err := previousReleaseTag(repo, "v0.1.0", patterns)
+	got, err := PreviousReleaseTag(repo, "v0.1.0", patterns)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -106,7 +106,7 @@ func GenerateNotes(input NotesInput) (string, error) {
 
 	// Find previous tag if not specified
 	if input.FromRef == "" {
-		prev, err := previousReleaseTag(input.RepoDir, input.ToRef, input.TagPatterns)
+		prev, err := PreviousReleaseTag(input.RepoDir, input.ToRef, input.TagPatterns)
 		if err != nil || prev == "" {
 			input.FromRef = ""
 		} else {
@@ -144,7 +144,7 @@ func GenerateNotes(input NotesInput) (string, error) {
 	}
 
 	// Get commits
-	commits, err := parseCommits(input.RepoDir, input.FromRef, input.ToRef)
+	commits, err := ParseCommits(input.RepoDir, input.FromRef, input.ToRef)
 	if err != nil {
 		return "", err
 	}
@@ -159,7 +159,7 @@ func GenerateNotes(input NotesInput) (string, error) {
 // currentRef and matches the configured tag patterns. It replaces the naive
 // git-describe approach which matched any tag (including rolling aliases like
 // "latest" or bare-version aliases like "0.1.0").
-func previousReleaseTag(repoDir, currentRef string, tagPatterns []string) (string, error) {
+func PreviousReleaseTag(repoDir, currentRef string, tagPatterns []string) (string, error) {
 	currentVersion := normalizeReleaseVersion(currentRef)
 
 	matchers, err := compileReleaseTagMatchers(tagPatterns)
@@ -371,7 +371,8 @@ func releaseType(isPrerelease bool) string {
 	return "stable"
 }
 
-func parseCommits(repoDir, fromRef, toRef string) ([]Commit, error) {
+// ParseCommits extracts conventional commits from a git log range.
+func ParseCommits(repoDir, fromRef, toRef string) ([]Commit, error) {
 	var rangeSpec string
 	if fromRef != "" {
 		rangeSpec = fromRef + ".." + toRef
