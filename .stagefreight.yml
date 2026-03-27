@@ -495,7 +495,7 @@ docs:
       - "docs/Component.md"
       - ".stagefreight/badges"
     push: true
-    skip_ci: true
+    skip_ci: false
 
 release:
   enabled: true
