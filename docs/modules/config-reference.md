@@ -17,6 +17,9 @@
 - [`docs`](#config-docs)
 - [`manifest`](#config-manifest)
 - [`release`](#config-release)
+- [`glossary`](#config-glossary)
+- [`presentation`](#config-presentation)
+- [`tag`](#config-tag)
 
 ---
 
@@ -465,6 +468,62 @@ commit:
 | `security_summary` | `security_summary` | string | Yes | — | string value |
 | `registry_links` | `registry_links` | bool | Yes | — | bool value |
 | `catalog_links` | `catalog_links` | bool | Yes | — | bool value |
+
+---
+
+<a id="config-glossary" name="config-glossary"></a>
+### glossary
+
+| Name | YAML Key | Type | Required | Default | Description |
+|------|----------|------|----------|---------|-------------|
+| `types` | `types` | map[string]object | Yes | — | map[string]object value |
+| `aliases` | `breaking.aliases` | []string | No | — | []string value |
+| `bang_suffix` | `breaking.bang_suffix` | bool | Yes | — | bool value |
+| `footer_keys` | `breaking.footer_keys` | []string | Yes | — | []string value |
+| `force_highlight` | `breaking.force_highlight` | bool | Yes | — | bool value |
+| `priority_boost` | `breaking.priority_boost` | int | Yes | — | int value |
+| `strip_phrases` | `filters.summary.strip_phrases` | []string | No | — | []string value |
+| `strip_regex` | `filters.summary.strip_regex` | []string | No | — | []string value |
+| `strip_keys` | `filters.trailers.strip_keys` | []string | No | — | []string value |
+| `normalize_whitespace` | `filters.normalize_whitespace` | bool | Yes | — | bool value |
+| `from` | `rewrites.phrases.from` | string | Yes | — | string value |
+| `to` | `rewrites.phrases.to` | string | Yes | — | string value |
+| `pattern` | `rewrites.regex.pattern` | string | Yes | — | string value |
+| `replace` | `rewrites.regex.replace` | string | Yes | — | string value |
+| `empty_strategy` | `render.empty_strategy` | string | Yes | — | string value |
+
+---
+
+<a id="config-presentation" name="config-presentation"></a>
+### presentation
+
+| Name | YAML Key | Type | Required | Default | Description |
+|------|----------|------|----------|---------|-------------|
+| `preserve_raw_subject` | `commit.preserve_raw_subject` | bool | Yes | — | bool value |
+| `enforce_conventional` | `commit.enforce_conventional` | bool | Yes | — | bool value |
+| `max_entries` | `tag.max_entries` | int | Yes | — | int value |
+| `group_by_type` | `tag.group_by_type` | bool | Yes | — | bool value |
+| `style` | `tag.style` | string | Yes | — | string value |
+| `include_release_visible_only` | `tag.include_release_visible_only` | bool | Yes | — | bool value |
+| `collapse_similar` | `tag.collapse_similar` | bool | Yes | — | bool value |
+| `max_entries` | `release.max_entries` | int | Yes | — | int value |
+| `group_by_type` | `release.group_by_type` | bool | Yes | — | bool value |
+| `style` | `release.style` | string | Yes | — | string value |
+| `include_release_visible_only` | `release.include_release_visible_only` | bool | Yes | — | bool value |
+
+---
+
+<a id="config-tag" name="config-tag"></a>
+### tag
+
+| Name | YAML Key | Type | Required | Default | Description |
+|------|----------|------|----------|---------|-------------|
+| `target` | `defaults.target` | string | Yes | — | string value |
+| `preview` | `defaults.preview` | bool | Yes | — | bool value |
+| `require_approval` | `defaults.require_approval` | bool | Yes | — | bool value |
+| `push` | `defaults.push` | bool | Yes | — | bool value |
+| `mode` | `message.mode` | string | Yes | — | string value |
+| `empty_strategy` | `message.empty_strategy` | string | Yes | — | string value |
 
 ---
 
