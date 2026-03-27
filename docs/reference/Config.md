@@ -34,6 +34,7 @@ Generated sections below are assembled from `docs/modules/config-reference.md` v
 - [`docs`](#config-docs)
 - [`manifest`](#config-manifest)
 - [`release`](#config-release)
+- [`lifecycle`](#config-lifecycle)
 - [`glossary`](#config-glossary)
 - [`presentation`](#config-presentation)
 - [`tag`](#config-tag)
@@ -485,6 +486,15 @@ commit:
 | `security_summary` | `security_summary` | string | Yes | — | string value |
 | `registry_links` | `registry_links` | bool | Yes | — | bool value |
 | `catalog_links` | `catalog_links` | bool | Yes | — | bool value |
+
+---
+
+<a id="config-lifecycle" name="config-lifecycle"></a>
+### lifecycle
+
+| Name | YAML Key | Type | Required | Default | Description |
+|------|----------|------|----------|---------|-------------|
+| `mode` | `mode` | string | Yes | — | string value |
 
 ---
 
