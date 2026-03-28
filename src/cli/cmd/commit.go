@@ -149,6 +149,18 @@ func runCommit(cmd *cobra.Command, args []string) error {
 		backend = &commit.GitBackend{RootDir: rootDir}
 	}
 
+	// Wire hook output renderer for git backend
+	if gb, ok := backend.(*commit.GitBackend); ok {
+		hookSectionOpened := false
+		gb.OnCommitLine = func(stream, line string) {
+			if !hookSectionOpened {
+				fmt.Fprintln(os.Stdout)
+				hookSectionOpened = true
+			}
+			fmt.Fprintf(os.Stdout, "    │ %s\n", line)
+		}
+	}
+
 	result, err := backend.Execute(ctx, plan, cfg.Commit.Conventional)
 	if err != nil {
 		return err

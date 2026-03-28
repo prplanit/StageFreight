@@ -1,15 +1,22 @@
 package commit
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
 )
 
 // GitBackend executes commits via the git CLI.
 type GitBackend struct {
 	RootDir string
+	// OnCommitLine is called for each stdout/stderr line during git commit.
+	// This allows the commit command to render hook output in structured form.
+	// If nil, hook output is captured but not forwarded.
+	OnCommitLine func(stream string, line string) // stream: "stdout" or "stderr"
 }
 
 // Execute stages files, creates a commit, and optionally pushes via git.
@@ -54,7 +61,13 @@ func (g *GitBackend) Execute(_ context.Context, plan *Plan, conventional bool) (
 		commitArgs = append(commitArgs, "--signoff")
 	}
 
-	if err := g.git(commitArgs...); err != nil {
+	// Execute commit with streaming — hooks are observable live.
+	handlers := StreamHandlers{}
+	if g.OnCommitLine != nil {
+		handlers.OnStdoutLine = func(line string) { g.OnCommitLine("stdout", line) }
+		handlers.OnStderrLine = func(line string) { g.OnCommitLine("stderr", line) }
+	}
+	if _, err := g.gitStream(handlers, commitArgs...); err != nil {
 		return nil, fmt.Errorf("committing: %w", err)
 	}
 
@@ -112,6 +125,106 @@ func (g *GitBackend) git(args ...string) error {
 		return fmt.Errorf("%s: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
+}
+
+// StreamHandlers receives incremental stdout/stderr lines from gitStream.
+// StageFreight's commit renderer uses these to build structured hook output.
+type StreamHandlers struct {
+	OnStdoutLine func(string)
+	OnStderrLine func(string)
+}
+
+// StreamResult holds captured output from a streaming git execution.
+type StreamResult struct {
+	Stdout   []byte
+	Stderr   []byte
+	ExitCode int
+}
+
+// gitStream executes a git command with incremental line-by-line output
+// delivery to caller callbacks. Captures full stdout/stderr separately.
+// Never writes directly to the terminal — StageFreight owns presentation.
+// Used only for git commit where hooks need to be observed live.
+func (g *GitBackend) gitStream(h StreamHandlers, args ...string) (*StreamResult, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = g.RootDir
+
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("stdout pipe: %w", err)
+	}
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, fmt.Errorf("stderr pipe: %w", err)
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("starting git %s: %w", args[0], err)
+	}
+
+	var stdoutBuf, stderrBuf bytes.Buffer
+	var wg sync.WaitGroup
+
+	// Read stdout incrementally
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		scanner := bufio.NewScanner(stdoutPipe)
+		for scanner.Scan() {
+			line := scanner.Text()
+			stdoutBuf.WriteString(line + "\n")
+			if h.OnStdoutLine != nil {
+				h.OnStdoutLine(line)
+			}
+		}
+		// Preserve any trailing partial fragment
+		if b := scanner.Bytes(); len(b) > 0 {
+			stdoutBuf.Write(b)
+			if h.OnStdoutLine != nil {
+				h.OnStdoutLine(string(b))
+			}
+		}
+	}()
+
+	// Read stderr incrementally
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		scanner := bufio.NewScanner(stderrPipe)
+		for scanner.Scan() {
+			line := scanner.Text()
+			stderrBuf.WriteString(line + "\n")
+			if h.OnStderrLine != nil {
+				h.OnStderrLine(line)
+			}
+		}
+		if b := scanner.Bytes(); len(b) > 0 {
+			stderrBuf.Write(b)
+			if h.OnStderrLine != nil {
+				h.OnStderrLine(string(b))
+			}
+		}
+	}()
+
+	wg.Wait()
+	waitErr := cmd.Wait()
+
+	result := &StreamResult{
+		Stdout: stdoutBuf.Bytes(),
+		Stderr: stderrBuf.Bytes(),
+	}
+
+	if waitErr != nil {
+		if exitErr, ok := waitErr.(*exec.ExitError); ok {
+			result.ExitCode = exitErr.ExitCode()
+		} else {
+			result.ExitCode = 1
+		}
+		return result, fmt.Errorf("git %s: exit %d: %s", args[0], result.ExitCode,
+			strings.TrimSpace(string(result.Stderr)))
+	}
+
+	return result, nil
 }
 
 func (g *GitBackend) gitOutput(args ...string) (string, error) {
