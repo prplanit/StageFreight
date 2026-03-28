@@ -42,7 +42,9 @@ Generated sections below are assembled from `docs/modules/cli-reference.md` via 
 - [`stagefreight docs generate`](#cli-stagefreight-docs-generate) — Generate reference documentation from code
 - [`stagefreight docs run`](#cli-stagefreight-docs-run) — Run all enabled documentation generators
 - [`stagefreight gitops`](#cli-stagefreight-gitops) — GitOps intelligence — inspect, impact, reconcile
+- [`stagefreight gitops impact`](#cli-stagefreight-gitops-impact) — Compute which kustomizations are affected by recent changes
 - [`stagefreight gitops inspect`](#cli-stagefreight-gitops-inspect) — Discover and display the Flux dependency graph
+- [`stagefreight gitops reconcile`](#cli-stagefreight-gitops-reconcile) — Reconcile affected Flux kustomizations
 - [`stagefreight glossary`](#cli-stagefreight-glossary) — Show the repo's change-language conventions
 - [`stagefreight help`](#cli-stagefreight-help) — Help about any command
 - [`stagefreight lint`](#cli-stagefreight-lint) — Run code quality checks
@@ -803,9 +805,38 @@ GitOps intelligence — inspect, impact, reconcile
 
 **Subcommands:**
 
+- [`impact`](#cli-stagefreight-gitops-impact) — Compute which kustomizations are affected by recent changes
 - [`inspect`](#cli-stagefreight-gitops-inspect) — Discover and display the Flux dependency graph
+- [`reconcile`](#cli-stagefreight-gitops-reconcile) — Reconcile affected Flux kustomizations
 
-**See also:** [`stagefreight`](#cli-stagefreight) · [`stagefreight gitops inspect`](#cli-stagefreight-gitops-inspect)
+**See also:** [`stagefreight`](#cli-stagefreight) · [`stagefreight gitops impact`](#cli-stagefreight-gitops-impact) · [`stagefreight gitops inspect`](#cli-stagefreight-gitops-inspect) · [`stagefreight gitops reconcile`](#cli-stagefreight-gitops-reconcile)
+
+---
+
+<a id="cli-stagefreight-gitops-impact" name="cli-stagefreight-gitops-impact"></a>
+### stagefreight gitops impact
+
+**Usage:** `stagefreight gitops impact impact`
+
+Determine which Flux Kustomizations are affected by file changes
+between two refs. Walks the reverse dependency graph for transitive impact.
+Outputs the ordered reconcile set.
+
+**Flags:**
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `--base` | string | `HEAD~1` | base ref for diff |
+| `--head` | string | `HEAD` | head ref for diff |
+
+**Inherited flags:**
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `--config` | string | — | config file (default: .stagefreight.yml) |
+| `-v, --verbose` | bool | — | verbose output |
+
+**See also:** [`stagefreight gitops`](#cli-stagefreight-gitops) · [`stagefreight gitops inspect`](#cli-stagefreight-gitops-inspect) · [`stagefreight gitops reconcile`](#cli-stagefreight-gitops-reconcile)
 
 ---
 
@@ -826,7 +857,35 @@ No configuration needed — everything is derived from actual manifests.
 | `--config` | string | — | config file (default: .stagefreight.yml) |
 | `-v, --verbose` | bool | — | verbose output |
 
-**See also:** [`stagefreight gitops`](#cli-stagefreight-gitops)
+**See also:** [`stagefreight gitops`](#cli-stagefreight-gitops) · [`stagefreight gitops impact`](#cli-stagefreight-gitops-impact) · [`stagefreight gitops reconcile`](#cli-stagefreight-gitops-reconcile)
+
+---
+
+<a id="cli-stagefreight-gitops-reconcile" name="cli-stagefreight-gitops-reconcile"></a>
+### stagefreight gitops reconcile
+
+**Usage:** `stagefreight gitops reconcile reconcile`
+
+Reconcile Flux kustomizations affected by recent changes.
+By default, computes impact from HEAD~1..HEAD and reconciles the affected set.
+Use --all to reconcile everything, or --only to target a specific kustomization.
+
+**Flags:**
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `--all` | bool | — | reconcile all kustomizations |
+| `--dry-run` | bool | — | preview reconcile set without executing |
+| `--only` | string | — | reconcile only this kustomization (ns/name) |
+
+**Inherited flags:**
+
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `--config` | string | — | config file (default: .stagefreight.yml) |
+| `-v, --verbose` | bool | — | verbose output |
+
+**See also:** [`stagefreight gitops`](#cli-stagefreight-gitops) · [`stagefreight gitops impact`](#cli-stagefreight-gitops-impact) · [`stagefreight gitops inspect`](#cli-stagefreight-gitops-inspect)
 
 ---
 
