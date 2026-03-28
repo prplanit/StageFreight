@@ -82,7 +82,7 @@ RUN wget -qO /usr/local/bin/osv-scanner \
       "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/osv-scanner_linux_amd64" && \
     chmod +x /usr/local/bin/osv-scanner
 
-ENV FLUX_VERSION=2.5.1 \
+ENV FLUX_VERSION=2.8.3 \
     KUBECTL_VERSION=1.34.0 \
     COSIGN_VERSION=3.0.5
 
