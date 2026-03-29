@@ -112,6 +112,46 @@ func ParseDockerPlanMeta(m map[string]string) DockerPlanMeta {
 	}
 }
 
+// StackAction is a typed execution intent for the transport layer.
+// Represents WHAT to execute, not HOW today's transport executes it.
+// Transport receives this, compiles it to whatever form it needs.
+// No absolute paths, no filesystem assumptions, no transport coupling.
+type StackAction struct {
+	Target      string // host identity
+	Stack       string // scope/name
+	Action      string // "up", "down", "restart"
+	ProjectName string // docker compose -p flag
+	WorkDir     string // working directory (relative to bundle or host-resolved)
+
+	// Staged bundle: transport decides how to materialize this.
+	// SSH copies it to remote tmpdir. Agent receives it as payload.
+	BundleDir string // local staging root containing all needed files
+
+	// Compose file and env files — relative to BundleDir.
+	ComposeFile string   // e.g. "compose.yaml"
+	EnvFiles    []string // e.g. [".env", "app_secret.env"]
+
+	// Hooks as ordered execution steps, not raw paths.
+	Hooks []Hook
+}
+
+// Hook is a lifecycle hook within a stack action.
+type Hook struct {
+	Phase string // "pre" | "post"
+	Path  string // relative to BundleDir
+}
+
+// ExecResult is the structured outcome of a transport execution.
+// All transports (local, SSH, future agents) return the same shape.
+// Full stderr captured — renderer decides how to tail/truncate.
+type ExecResult struct {
+	Success  bool
+	ExitCode int
+	Stdout   string
+	Stderr   string
+	Duration time.Duration
+}
+
 // HashStamps tracks last-known hashes for drift detection.
 // Stored in .stagefreight-state.yml (git-tracked).
 type HashStamps struct {

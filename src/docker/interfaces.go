@@ -18,9 +18,10 @@ type SecretsProvider interface {
 	IsEncrypted(path string) bool
 }
 
-// HostTransport provides remote execution on a target host.
+// HostTransport executes typed stack actions on a target host.
+// Transport compiles the intent to whatever execution form it needs.
+// It does NOT know compose lifecycle semantics — it executes steps.
 type HostTransport interface {
-	Exec(ctx context.Context, cmd string, args ...string) (stdout, stderr []byte, err error)
-	CopyTo(ctx context.Context, localPath, remotePath string) error
+	ExecuteAction(ctx context.Context, action StackAction) (ExecResult, error)
 	Close() error
 }

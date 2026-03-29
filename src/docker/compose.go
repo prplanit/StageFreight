@@ -264,89 +264,93 @@ func (c *ComposeBackend) resolveTransportForStack(meta DockerPlanMeta) HostTrans
 	return &LocalTransport{}
 }
 
-// deployStack handles secret decryption, pre/post scripts, and docker compose up.
-// All execution goes through the transport — never direct exec.Command.
+// deployStack builds a staged bundle and typed StackAction, then delegates to transport.
+// Backend owns staging. Transport owns execution. No coupling.
 func deployStack(ctx context.Context, stack StackInfo, rootDir string, secrets SecretsProvider, transport HostTransport) error {
 	stackDir := filepath.Join(rootDir, stack.Path)
 
-	// Create tmpfs staging for decrypted secrets
-	tmpDir, err := os.MkdirTemp("", "sf-docker-*")
+	// Create local bundle staging dir.
+	bundleDir, err := os.MkdirTemp("", "sf-bundle-*")
 	if err != nil {
-		return fmt.Errorf("creating staging dir: %w", err)
+		return fmt.Errorf("creating bundle dir: %w", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer os.RemoveAll(bundleDir)
 
-	// Decrypt encrypted env files to staging
-	var envArgs []string
+	// Stage compose file into bundle.
+	if stack.ComposeFile != "" {
+		if err := copyFile(filepath.Join(stackDir, stack.ComposeFile), filepath.Join(bundleDir, stack.ComposeFile)); err != nil {
+			return fmt.Errorf("staging compose file: %w", err)
+		}
+	}
+
+	// Stage env files — decrypt encrypted ones in-memory.
+	var envFiles []string
 	for _, ef := range stack.EnvFiles {
+		var data []byte
 		if ef.Encrypted && secrets != nil {
-			plaintext, err := secrets.Decrypt(ctx, ef.FullPath)
+			data, err = secrets.Decrypt(ctx, ef.FullPath)
 			if err != nil {
 				return fmt.Errorf("decrypting %s: %w", ef.Path, err)
 			}
-			staged := filepath.Join(tmpDir, ef.Path)
-			if err := os.WriteFile(staged, plaintext, 0600); err != nil {
-				return fmt.Errorf("staging %s: %w", ef.Path, err)
-			}
-			envArgs = append(envArgs, "--env-file", staged)
 		} else {
-			envArgs = append(envArgs, "--env-file", filepath.Join(stackDir, ef.Path))
+			data, err = os.ReadFile(ef.FullPath)
+			if err != nil {
+				return fmt.Errorf("reading %s: %w", ef.Path, err)
+			}
+		}
+		if err := os.WriteFile(filepath.Join(bundleDir, ef.Path), data, 0600); err != nil {
+			return fmt.Errorf("staging %s: %w", ef.Path, err)
+		}
+		envFiles = append(envFiles, ef.Path)
+	}
+
+	// Stage scripts into bundle + build hooks.
+	var hooks []Hook
+	for _, s := range stack.Scripts {
+		if err := copyFile(filepath.Join(stackDir, s), filepath.Join(bundleDir, s)); err != nil {
+			return fmt.Errorf("staging %s: %w", s, err)
+		}
+		phase := ""
+		switch s {
+		case "pre.sh":
+			phase = "pre"
+		case "post.sh":
+			phase = "post"
+		}
+		if phase != "" {
+			hooks = append(hooks, Hook{Phase: phase, Path: s})
 		}
 	}
 
-	// Run pre.sh if present — through transport.
-	if containsScript(stack.Scripts, "pre.sh") {
-		_, stderr, err := transport.Exec(ctx, "bash", filepath.Join(stackDir, "pre.sh"))
-		if err != nil {
-			return fmt.Errorf("pre.sh: %s", strings.TrimSpace(string(stderr)))
-		}
+	// Build typed execution intent.
+	action := StackAction{
+		Target:      stack.Scope,
+		Stack:       stack.Scope + "/" + stack.Name,
+		Action:      "up",
+		ProjectName: stack.Name,
+		WorkDir:     stackDir,
+		BundleDir:   bundleDir,
+		ComposeFile: stack.ComposeFile,
+		EnvFiles:    envFiles,
+		Hooks:       hooks,
 	}
 
-	// docker compose up -d — through transport.
-	args := []string{"compose", "-f", filepath.Join(stackDir, stack.ComposeFile)}
-	args = append(args, envArgs...)
-	args = append(args, "-p", stack.Name, "up", "-d")
-
-	_, stderr, err := transport.Exec(ctx, "docker", args...)
+	// Delegate to transport.
+	result, err := transport.ExecuteAction(ctx, action)
 	if err != nil {
-		return fmt.Errorf("docker compose up: %s", strings.TrimSpace(string(stderr)))
-	}
-
-	// Run post.sh if present — through transport.
-	if containsScript(stack.Scripts, "post.sh") {
-		_, stderr, err := transport.Exec(ctx, "bash", filepath.Join(stackDir, "post.sh"))
-		if err != nil {
-			return fmt.Errorf("post.sh: %s", strings.TrimSpace(string(stderr)))
-		}
+		return fmt.Errorf("%s: %s", err, strings.TrimSpace(result.Stderr))
 	}
 
 	return nil
 }
 
-// minimalEnv returns a restricted environment to prevent host variable leakage.
-// DD-UI proven pattern.
-func minimalEnv() []string {
-	env := []string{
-		"PATH=" + os.Getenv("PATH"),
-		"HOME=" + os.Getenv("HOME"),
+// copyFile copies a single file.
+func copyFile(src, dst string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
 	}
-	if v := os.Getenv("DOCKER_HOST"); v != "" {
-		env = append(env, "DOCKER_HOST="+v)
-	}
-	if v := os.Getenv("SOPS_AGE_KEY"); v != "" {
-		env = append(env, "SOPS_AGE_KEY="+v)
-	}
-	if v := os.Getenv("SOPS_AGE_KEY_FILE"); v != "" {
-		env = append(env, "SOPS_AGE_KEY_FILE="+v)
-	}
-	return env
+	return os.WriteFile(dst, data, 0600)
 }
 
-func containsScript(scripts []string, name string) bool {
-	for _, s := range scripts {
-		if s == name {
-			return true
-		}
-	}
-	return false
-}
+
