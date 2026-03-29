@@ -177,7 +177,13 @@ func BuildPlanOutput(plan *runtime.LifecyclePlan, trust DiscoveryTrust, targets 
 
 		status := "in_sync"
 		driftKind := "none"
-		if meta.DriftDetected {
+
+		// Unknown: drift could not be evaluated (transport failure, etc.)
+		if !meta.DriftDetected && meta.DriftReason != "" && meta.DriftTier == 2 &&
+			meta.DriftReason != "no drift detected" {
+			status = "unknown"
+			driftKind = "unknown"
+		} else if meta.DriftDetected {
 			if meta.BlockedReason != "" {
 				status = "blocked"
 				output.Summary.Blocked++
