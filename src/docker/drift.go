@@ -45,21 +45,30 @@ func DetectDrift(ctx context.Context, stack StackInfo, rootDir string, stamps *H
 	// Tier 2: bundle unchanged, check container runtime state.
 	// Only if transport is available (skip in local-only/read-only mode).
 	if transport != nil {
-		inspection, err := transport.InspectStack(ctx, stack.Name)
-		if err == nil {
-			tier2 := checkTier2Drift(inspection, stored)
-			if tier2 != "" {
-				return DriftResult{
-					Stack:      key,
-					Drifted:    true,
-					Tier:       2,
-					Reason:     tier2,
-					BundleHash: currentHash,
-					StoredHash: stored.BundleHash,
-				}
+		inspection, err := transport.InspectStack(ctx, stack.ComposeProject)
+		if err != nil {
+			// Transport failure — don't hide it. Mark as unknown Tier 2.
+			return DriftResult{
+				Stack:      key,
+				Drifted:    false,
+				Tier:       2,
+				Reason:     fmt.Sprintf("Tier 2 unavailable: %s", err),
+				BundleHash: currentHash,
+				StoredHash: stored.BundleHash,
 			}
 		}
-		// If inspect fails, skip Tier 2 silently — Tier 1 already passed.
+
+		tier2 := checkTier2Drift(inspection, stored)
+		if tier2 != "" {
+			return DriftResult{
+				Stack:      key,
+				Drifted:    true,
+				Tier:       2,
+				Reason:     tier2,
+				BundleHash: currentHash,
+				StoredHash: stored.BundleHash,
+			}
+		}
 	}
 
 	return DriftResult{
@@ -73,23 +82,32 @@ func DetectDrift(ctx context.Context, stack StackInfo, rootDir string, stamps *H
 
 // checkTier2Drift compares runtime container state against stored stamps.
 // Returns drift reason string, or "" if no drift.
+// Compares runtime config hash against STORED config hash from last apply.
+// bundle hash != compose config hash — they are separate signals.
 func checkTier2Drift(inspection StackInspection, stored StackStamp) string {
 	if len(inspection.Services) == 0 {
 		return "no containers running for project"
 	}
 
-	// Check if any service has a different config hash than what we last deployed.
-	// Compose sets com.docker.compose.config-hash on each container.
-	// If someone ran `docker compose up` manually outside StageFreight,
-	// the config hash will differ from our bundle hash.
+	// Check service health.
 	for _, svc := range inspection.Services {
 		if !svc.Running {
 			return fmt.Sprintf("service %s is not running (state: %s)", svc.Service, svc.State)
 		}
 	}
 
-	// Check for config hash consistency across services.
-	// All services in a compose project should have the same config hash.
+	// Compare runtime config hashes against stored config hash.
+	// This catches manual `docker compose up` outside StageFreight.
+	if stored.ConfigHash != "" {
+		for _, svc := range inspection.Services {
+			if svc.ConfigHash != "" && svc.ConfigHash != stored.ConfigHash {
+				return fmt.Sprintf("runtime config diverged from last applied state (service %s: runtime=%s, stored=%s)",
+					svc.Service, svc.ConfigHash[:12], stored.ConfigHash[:12])
+			}
+		}
+	}
+
+	// Check for internal consistency — all services should share the same config hash.
 	hashes := map[string]bool{}
 	for _, svc := range inspection.Services {
 		if svc.ConfigHash != "" {
@@ -97,7 +115,7 @@ func checkTier2Drift(inspection StackInspection, stored StackStamp) string {
 		}
 	}
 	if len(hashes) > 1 {
-		return "container configurations diverged (mixed config hashes)"
+		return "container configurations diverged (mixed config hashes across services)"
 	}
 
 	return ""

@@ -28,14 +28,15 @@ type HostTarget struct {
 
 // StackInfo describes a discovered IaC stack.
 type StackInfo struct {
-	Scope       string // host name or group name
-	ScopeKind   string // "host" or "group"
-	Name        string // stack directory name
-	Path        string // relative path from repo root
-	ComposeFile string // detected compose filename
-	EnvFiles    []EnvFile
-	Scripts     []string // pre.sh, deploy.sh, post.sh
-	DeployKind  string   // "compose", "script", "unmanaged"
+	Scope          string // host name or group name
+	ScopeKind      string // "host" or "group"
+	Name           string // stack directory name
+	Path           string // relative path from repo root
+	ComposeFile    string // detected compose filename
+	ComposeProject string // canonical compose project name (for container identity)
+	EnvFiles       []EnvFile
+	Scripts        []string // pre.sh, deploy.sh, post.sh
+	DeployKind     string   // "compose", "script", "unmanaged"
 }
 
 // EnvFile describes a discovered environment file within a stack.
@@ -179,5 +180,6 @@ type HashStamps struct {
 // StackStamp records the hash state of a stack after successful deployment.
 type StackStamp struct {
 	BundleHash  string    `yaml:"bundle_hash"`
+	ConfigHash  string    `yaml:"config_hash"` // runtime compose config hash from last apply
 	DeployedAt  time.Time `yaml:"deployed_at"`
 }

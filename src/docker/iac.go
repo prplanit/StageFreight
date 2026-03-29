@@ -75,14 +75,15 @@ func ScanIaC(rootDir, iacPath string, knownHosts map[string]bool) ([]StackInfo, 
 		}
 
 		stacks = append(stacks, StackInfo{
-			Scope:       scopeName,
-			ScopeKind:   scopeKind,
-			Name:        stackName,
-			Path:        filepath.ToSlash(filepath.Join(iacPath, scopeName, stackName)),
-			ComposeFile: composeFile,
-			EnvFiles:    envFiles,
-			Scripts:     scripts,
-			DeployKind:  deployKind,
+			Scope:          scopeName,
+			ScopeKind:      scopeKind,
+			Name:           stackName,
+			Path:           filepath.ToSlash(filepath.Join(iacPath, scopeName, stackName)),
+			ComposeFile:    composeFile,
+			ComposeProject: stackName, // canonical project identity for container label matching
+			EnvFiles:       envFiles,
+			Scripts:        scripts,
+			DeployKind:     deployKind,
 		})
 
 		return fs.SkipDir // don't recurse into stack subdirs

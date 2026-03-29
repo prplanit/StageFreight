@@ -231,11 +231,23 @@ func (c *ComposeBackend) Execute(ctx context.Context, plan *runtime.LifecyclePla
 		} else {
 			ar.Success = true
 			ar.Message = "deployed"
-			// Update hash stamps from typed plan metadata (not rediscovered)
+			// Update hash stamps from typed plan metadata (not rediscovered).
 			meta := ParseDockerPlanMeta(pa.Metadata)
-			bundleHash := meta.BundleHash
+
+			// Capture runtime config hash post-deploy for Tier 2 drift baseline.
+			configHash := ""
+			if inspection, err := transport.InspectStack(ctx, stack.ComposeProject); err == nil {
+				for _, svc := range inspection.Services {
+					if svc.ConfigHash != "" {
+						configHash = svc.ConfigHash
+						break
+					}
+				}
+			}
+
 			c.stamps.Stacks[pa.Name] = StackStamp{
-				BundleHash: bundleHash,
+				BundleHash: meta.BundleHash,
+				ConfigHash: configHash,
 				DeployedAt: time.Now(),
 			}
 		}
