@@ -362,6 +362,7 @@ func buildModulesV2(appCfg *config.Config, items []config.NarratorItem, linkBase
 			modules = append(modules, &narrator.K8sInventoryModule{
 				CatalogPath: item.CatalogPath,
 				CommitSHA:   sha,
+				RepoRoot:    rootDir,
 			})
 
 		case "props":

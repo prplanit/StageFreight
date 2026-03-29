@@ -47,13 +47,44 @@ type AppRecord struct {
 	Images        []ImageRef
 	Version       string // resolved via strict precedence
 	Hosts         []string // deduplicated, sorted hostnames from routes
+	Exposure      ExposureLevel // derived from gateway parentRefs
+	Gateway       string // gateway name for exposure context (e.g. "xylem-gateway")
 	Replicas      string // "ready/desired" format
 	Status        Status
 	Collision     bool   // true if identity was disambiguated via #shortUID
+	Sources       []DeclaredSource // authoritative repo paths from Flux graph
 	HomepageURL   string
 	DocsURL       string
 	SourceURL     string
 }
+
+// DeclaredSource links an app to its authoritative declaration in the repo.
+// Resolved from Flux objects, not guessed from filenames.
+// Sources are authoritative or empty — never partial guesses.
+type DeclaredSource struct {
+	Kind     string // overlay, helmrelease, kustomization, policy
+	RepoPath string // repo-relative authoritative path
+	Relation string // deploys, configures, secures, depends_on
+	Primary  bool
+}
+
+// Source relation constants — prevent typos across discovery/renderer.
+const (
+	SourceRelationDeploys    = "deploys"
+	SourceRelationConfigures = "configures"
+	SourceRelationSecures    = "secures"
+	SourceRelationDependsOn  = "depends_on"
+)
+
+// ExposureLevel classifies how an app is exposed.
+type ExposureLevel string
+
+const (
+	ExposureInternet ExposureLevel = "internet" // via public gateway (phloem, cell-membrane)
+	ExposureIntranet ExposureLevel = "intranet" // via internal gateway (xylem)
+	ExposureLAN      ExposureLevel = "lan"      // LoadBalancer, direct IP
+	ExposureCluster  ExposureLevel = "cluster"  // no external access
+)
 
 // ComponentRef identifies a single workload component within a multi-component app.
 type ComponentRef struct {
@@ -70,9 +101,10 @@ type ImageRef struct {
 // ExposureRef represents a discovered route/ingress attachment.
 // Interface-based: HTTPRoute today, Ingress extensible later.
 type ExposureRef struct {
-	Kind string // "HTTPRoute", "Ingress"
-	Host string
-	Name string
+	Kind    string // "HTTPRoute", "Ingress"
+	Host    string
+	Name    string
+	Gateway string // parentRef gateway name for exposure classification
 }
 
 // Status represents the health state of an application.

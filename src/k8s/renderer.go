@@ -6,9 +6,39 @@ import (
 )
 
 const maxHostsDisplay = 3
+const maxSourceLinks = 3
+
+// statusIcon returns a status emoji for the summary table.
+func statusIcon(s Status) string {
+	switch s {
+	case StatusHealthy:
+		return "✅"
+	case StatusDegraded:
+		return "⚠️"
+	case StatusDown:
+		return "❌"
+	default:
+		return "❓"
+	}
+}
+
+// exposureIcon returns an exposure indicator.
+func exposureIcon(e ExposureLevel) string {
+	switch e {
+	case ExposureInternet:
+		return "🌐"
+	case ExposureIntranet:
+		return "🔒"
+	case ExposureLAN:
+		return "📡"
+	default:
+		return "🏠"
+	}
+}
 
 // RenderOverview produces stable, deterministic markdown from a DiscoveryResult.
-// Output is placed between narrator markers by the caller.
+// Two-layer UX: minimal summary table + expandable details per app.
+// Docs are scanned, not read — instant orientation in <3 seconds.
 func RenderOverview(result *DiscoveryResult, commitSHA string) string {
 	var b strings.Builder
 
@@ -22,26 +52,56 @@ func RenderOverview(result *DiscoveryResult, commitSHA string) string {
 	}
 	b.WriteString("\n\n")
 
-	// Apps section
+	// Status aggregation
 	if len(result.Apps) > 0 {
+		healthy, degraded, down := 0, 0, 0
+		for _, r := range result.Apps {
+			switch r.Status {
+			case StatusHealthy:
+				healthy++
+			case StatusDegraded:
+				degraded++
+			case StatusDown:
+				down++
+			}
+		}
 		b.WriteString(fmt.Sprintf("## Apps & Services (%d)\n\n", len(result.Apps)))
+		b.WriteString(fmt.Sprintf("✅ %d healthy", healthy))
+		if degraded > 0 {
+			b.WriteString(fmt.Sprintf(" · ⚠️ %d degraded", degraded))
+		}
+		if down > 0 {
+			b.WriteString(fmt.Sprintf(" · ❌ %d down", down))
+		}
+		b.WriteString("\n\n")
 		renderAppsByCategory(&b, result.Apps)
 	}
 
 	// Platform section
 	if len(result.Platform) > 0 {
 		b.WriteString(fmt.Sprintf("## Platform Components (%d)\n\n", len(result.Platform)))
-		b.WriteString("| Component | Namespace | Version | Status |\n")
-		b.WriteString("| --- | --- | --- | --- |\n")
+		b.WriteString("| Component | Namespace | Status |\n")
+		b.WriteString("| --- | --- | --- |\n")
 		for _, r := range result.Platform {
-			b.WriteString(fmt.Sprintf("| %s | %s | %s | %s |\n",
+			b.WriteString(fmt.Sprintf("| %s | %s | %s |\n",
 				escMD(r.FriendlyName),
 				escMD(r.Key.Namespace),
-				escMD(r.Version),
-				escMD(string(r.Status)),
+				statusIcon(r.Status),
 			))
 		}
 		b.WriteString("\n")
+
+		// Platform details (collapsed)
+		b.WriteString("<details>\n<summary>Platform details</summary>\n\n")
+		for _, r := range result.Platform {
+			b.WriteString(fmt.Sprintf("**%s** — %s — %s\n",
+				escMD(r.FriendlyName),
+				escMD(renderType(r.WorkloadKinds)),
+				escMD(r.Version)))
+			b.WriteString(fmt.Sprintf("- Namespace: %s\n", r.Key.Namespace))
+			b.WriteString(fmt.Sprintf("- Replicas: %s\n\n", r.Replicas))
+		}
+		b.WriteString("</details>\n\n")
 	}
 
 	// Graveyard section
@@ -62,8 +122,9 @@ func RenderOverview(result *DiscoveryResult, commitSHA string) string {
 	return b.String()
 }
 
-// renderAppsByCategory groups apps by category and renders each as a table.
+// renderAppsByCategory groups apps and renders Layer 1 (summary table) + Layer 2 (details).
 func renderAppsByCategory(b *strings.Builder, apps []AppRecord) {
+	// Layer 1: Summary table per category
 	var currentCat string
 	for _, r := range apps {
 		if r.Category != currentCat {
@@ -73,21 +134,105 @@ func renderAppsByCategory(b *strings.Builder, apps []AppRecord) {
 			currentCat = r.Category
 			ns := r.Key.Namespace
 			b.WriteString(fmt.Sprintf("### %s (%s)\n\n", currentCat, ns))
-			b.WriteString("| App | Type | Version | Hosts | Description |\n")
-			b.WriteString("| --- | --- | --- | --- | --- |\n")
+			b.WriteString("| App | Status | Exposure | Links |\n")
+			b.WriteString("| --- | --- | --- | --- |\n")
 		}
 
-		b.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s |\n",
+		// Exposure cell: icon + first host
+		exposure := exposureIcon(r.Exposure)
+		if len(r.Hosts) > 0 {
+			exposure += " " + escMD(r.Hosts[0])
+		}
+
+		// Links cell: action-oriented, max 3
+		links := renderSourceLinks(r)
+
+		b.WriteString(fmt.Sprintf("| %s | %s | %s | %s |\n",
 			escMD(r.FriendlyName),
-			escMD(renderType(r.WorkloadKinds)),
-			escMD(r.Version),
-			escMD(renderHosts(r.Hosts)),
-			escMD(r.Description),
+			statusIcon(r.Status),
+			exposure,
+			links,
 		))
 	}
+
 	if currentCat != "" {
 		b.WriteString("\n")
 	}
+
+	// Layer 2: Details per app (collapsed)
+	b.WriteString("<details>\n<summary>App details</summary>\n\n")
+	for _, r := range apps {
+		b.WriteString(fmt.Sprintf("**%s** — %s — %s\n",
+			escMD(r.FriendlyName),
+			escMD(renderType(r.WorkloadKinds)),
+			escMD(r.Version)))
+		b.WriteString(fmt.Sprintf("- Namespace: %s\n", r.Key.Namespace))
+		b.WriteString(fmt.Sprintf("- Replicas: %s\n", r.Replicas))
+
+		if len(r.Hosts) > 0 {
+			b.WriteString(fmt.Sprintf("- Hosts: %s\n", strings.Join(r.Hosts, ", ")))
+		}
+		if r.Gateway != "" {
+			b.WriteString(fmt.Sprintf("- Gateway: %s\n", r.Gateway))
+		}
+		if r.Description != "" {
+			b.WriteString(fmt.Sprintf("- Description: %s\n", r.Description))
+		}
+
+		// Full source breakdown
+		if len(r.Sources) > 0 {
+			b.WriteString("- Sources:\n")
+			for _, src := range r.Sources {
+				label := src.Relation
+				if src.Primary {
+					label += " (primary)"
+				}
+				b.WriteString(fmt.Sprintf("  - %s → `%s`\n", label, src.RepoPath))
+			}
+		}
+
+		b.WriteString("\n")
+	}
+	b.WriteString("</details>\n")
+}
+
+// renderSourceLinks builds action-oriented link labels from DeclaredSources.
+// Order: open → deploy → policy. Max 3 links.
+func renderSourceLinks(r AppRecord) string {
+	var links []string
+
+	// [open] — first public hostname (if internet-exposed)
+	if r.Exposure == ExposureInternet && len(r.Hosts) > 0 {
+		links = append(links, fmt.Sprintf("[open](https://%s)", r.Hosts[0]))
+	}
+
+	// Source links: deploy first, then policy, then others
+	linkOrder := []string{SourceRelationDeploys, SourceRelationSecures, SourceRelationConfigures, SourceRelationDependsOn}
+	for _, relation := range linkOrder {
+		if len(links) >= maxSourceLinks {
+			break
+		}
+		for _, src := range r.Sources {
+			if src.Relation == relation {
+				label := "deploy"
+				switch relation {
+				case SourceRelationSecures:
+					label = "policy"
+				case SourceRelationConfigures:
+					label = "config"
+				case SourceRelationDependsOn:
+					label = "deps"
+				}
+				links = append(links, fmt.Sprintf("[%s](%s)", label, src.RepoPath))
+				break // one per relation
+			}
+		}
+	}
+
+	if len(links) == 0 {
+		return ""
+	}
+	return strings.Join(links, " · ")
 }
 
 // renderType produces a compact type string from workload kinds.
@@ -102,7 +247,6 @@ func renderType(kinds []string) string {
 }
 
 // renderHosts produces a compact, truncated hostname list.
-// Sorted before truncation for deterministic output.
 func renderHosts(hosts []string) string {
 	if len(hosts) == 0 {
 		return ""
