@@ -134,22 +134,23 @@ func (s *SSHTransport) ExecuteAction(ctx context.Context, action StackAction) (E
 	remoteAction.BundleDir = remoteDir
 
 	// Execute hooks and compose as ordered steps via SSH.
+	// All commands run from the remote BundleDir for consistent working directory.
+
 	// Pre hooks.
 	for _, hook := range remoteAction.Hooks {
 		if hook.Phase != "pre" {
 			continue
 		}
-		scriptPath := filepath.Join(remoteDir, hook.Path)
-		er := s.sshExecResult(ctx, "bash", scriptPath)
+		er := s.sshExecInDir(ctx, remoteDir, "bash", hook.Path)
 		if !er.Success {
 			er.Duration = time.Since(start)
 			return er, fmt.Errorf("pre hook %s failed: exit %d", hook.Path, er.ExitCode)
 		}
 	}
 
-	// Compose action.
+	// Compose action — executed from BundleDir.
 	args := composeArgsRemote(remoteAction)
-	er = s.sshExecResult(ctx, "docker", args...)
+	er = s.sshExecInDir(ctx, remoteDir, "docker", args...)
 	result.Stdout = er.Stdout
 	result.Stderr = er.Stderr
 	result.ExitCode = er.ExitCode
@@ -165,8 +166,7 @@ func (s *SSHTransport) ExecuteAction(ctx context.Context, action StackAction) (E
 		if hook.Phase != "post" {
 			continue
 		}
-		scriptPath := filepath.Join(remoteDir, hook.Path)
-		er := s.sshExecResult(ctx, "bash", scriptPath)
+		er := s.sshExecInDir(ctx, remoteDir, "bash", hook.Path)
 		if !er.Success {
 			result.Duration = time.Since(start)
 			result.Success = false
@@ -185,6 +185,39 @@ func (s *SSHTransport) sshExec(ctx context.Context, cmd string, args ...string) 
 		return r, fmt.Errorf("ssh exec failed: exit %d", r.ExitCode)
 	}
 	return r, nil
+}
+
+// sshExecInDir executes a command on the remote host from a specific working directory.
+// Uses `cd <dir> && cmd args...` to enforce execution context.
+func (s *SSHTransport) sshExecInDir(ctx context.Context, dir string, cmd string, args ...string) ExecResult {
+	// Build the full remote command: cd <dir> && cmd arg1 arg2 ...
+	parts := []string{"cd", dir, "&&", cmd}
+	parts = append(parts, args...)
+	fullCmd := strings.Join(parts, " ")
+
+	sshArgs := s.baseArgs()
+	sshArgs = append(sshArgs, "--", "bash", "-c", fullCmd)
+
+	c := exec.CommandContext(ctx, "ssh", sshArgs...)
+	var stdout, stderr bytes.Buffer
+	c.Stdout = &stdout
+	c.Stderr = &stderr
+	err := c.Run()
+
+	r := ExecResult{
+		Stdout: stdout.String(),
+		Stderr: stderr.String(),
+	}
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			r.ExitCode = exitErr.ExitCode()
+		} else {
+			r.ExitCode = 1
+		}
+	} else {
+		r.Success = true
+	}
+	return r
 }
 
 func (s *SSHTransport) sshExecResult(ctx context.Context, cmd string, args ...string) ExecResult {
