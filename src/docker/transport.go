@@ -33,9 +33,9 @@ func (l *LocalTransport) ExecuteAction(ctx context.Context, action StackAction) 
 		}
 	}
 
-	// Compose action.
+	// Compose action — execute from BundleDir.
 	args := composeArgs(action)
-	er := l.execLocal(ctx, "docker", args...)
+	er := l.execLocalInDir(ctx, action.BundleDir, "docker", args...)
 	result.Stdout = er.Stdout
 	result.Stderr = er.Stderr
 	result.ExitCode = er.ExitCode
@@ -66,7 +66,14 @@ func (l *LocalTransport) ExecuteAction(ctx context.Context, action StackAction) 
 }
 
 func (l *LocalTransport) execLocal(ctx context.Context, cmd string, args ...string) ExecResult {
+	return l.execLocalInDir(ctx, "", cmd, args...)
+}
+
+func (l *LocalTransport) execLocalInDir(ctx context.Context, dir string, cmd string, args ...string) ExecResult {
 	c := exec.CommandContext(ctx, cmd, args...)
+	if dir != "" {
+		c.Dir = dir
+	}
 	var stdout, stderr bytes.Buffer
 	c.Stdout = &stdout
 	c.Stderr = &stderr
