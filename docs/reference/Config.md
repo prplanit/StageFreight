@@ -524,6 +524,10 @@ commit:
 | `groups` | `targets.selector.groups` | []string | Yes | — | []string value |
 | `path` | `iac.path` | string | Yes | — | string value |
 | `provider` | `secrets.provider` | string | Yes | — | string value |
+| `tier2_action` | `drift.tier2_action` | string | Yes | — | string value |
+| `orphan_action` | `drift.orphan_action` | string | Yes | — | string value |
+| `orphan_threshold` | `drift.orphan_threshold` | int | Yes | — | int value |
+| `prune_requires_confirmation` | `drift.prune_requires_confirmation` | bool | Yes | — | bool value |
 
 ---
 
