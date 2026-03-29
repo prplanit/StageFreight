@@ -134,12 +134,17 @@ func (s *SSHTransport) ExecuteAction(ctx context.Context, action StackAction) (E
 	result := ExecResult{}
 
 	// Create remote tmpdir for the bundle.
-	remoteTmp, er := s.sshExec(ctx, "mktemp", "-d", "/tmp/sf-bundle-XXXXXX")
-	if !er.Success {
-		er.Duration = time.Since(start)
-		return er, fmt.Errorf("creating remote tmpdir: %s", strings.TrimSpace(er.Stderr))
+	// Dual-channel check: transport failure (err) AND command failure (!Success).
+	mkdirResult, err := s.sshExec(ctx, "mktemp", "-d", "/tmp/sf-bundle-XXXXXX")
+	if err != nil {
+		mkdirResult.Duration = time.Since(start)
+		return mkdirResult, fmt.Errorf("creating remote tmpdir: %w", err)
 	}
-	remoteDir := strings.TrimSpace(remoteTmp.Stdout)
+	if !mkdirResult.Success {
+		mkdirResult.Duration = time.Since(start)
+		return mkdirResult, fmt.Errorf("creating remote tmpdir failed: %s", strings.TrimSpace(mkdirResult.Stderr))
+	}
+	remoteDir := strings.TrimSpace(mkdirResult.Stdout)
 
 	// Always clean up remote tmpdir.
 	defer func() {
@@ -165,24 +170,24 @@ func (s *SSHTransport) ExecuteAction(ctx context.Context, action StackAction) (E
 		if hook.Phase != "pre" {
 			continue
 		}
-		er := s.sshExecInDir(ctx, remoteDir, "bash", hook.Path)
-		if !er.Success {
-			er.Duration = time.Since(start)
-			return er, fmt.Errorf("pre hook %s failed: exit %d", hook.Path, er.ExitCode)
+		hookResult := s.sshExecInDir(ctx, remoteDir, "bash", hook.Path)
+		if !hookResult.Success {
+			hookResult.Duration = time.Since(start)
+			return hookResult, fmt.Errorf("pre hook %s failed: exit %d", hook.Path, hookResult.ExitCode)
 		}
 	}
 
 	// Compose action — executed from BundleDir.
 	args := composeArgsRemote(remoteAction)
-	er = s.sshExecInDir(ctx, remoteDir, "docker", args...)
-	result.Stdout = er.Stdout
-	result.Stderr = er.Stderr
-	result.ExitCode = er.ExitCode
-	result.Success = er.Success
+	composeResult := s.sshExecInDir(ctx, remoteDir, "docker", args...)
+	result.Stdout = composeResult.Stdout
+	result.Stderr = composeResult.Stderr
+	result.ExitCode = composeResult.ExitCode
+	result.Success = composeResult.Success
 
-	if !er.Success {
+	if !composeResult.Success {
 		result.Duration = time.Since(start)
-		return result, fmt.Errorf("docker compose %s failed: exit %d", action.Action, er.ExitCode)
+		return result, fmt.Errorf("docker compose %s failed: exit %d", action.Action, composeResult.ExitCode)
 	}
 
 	// Post hooks.
@@ -190,12 +195,12 @@ func (s *SSHTransport) ExecuteAction(ctx context.Context, action StackAction) (E
 		if hook.Phase != "post" {
 			continue
 		}
-		er := s.sshExecInDir(ctx, remoteDir, "bash", hook.Path)
-		if !er.Success {
+		hookResult := s.sshExecInDir(ctx, remoteDir, "bash", hook.Path)
+		if !hookResult.Success {
 			result.Duration = time.Since(start)
 			result.Success = false
-			result.Stderr += "\n" + er.Stderr
-			return result, fmt.Errorf("post hook %s failed: exit %d", hook.Path, er.ExitCode)
+			result.Stderr += "\n" + hookResult.Stderr
+			return hookResult, fmt.Errorf("post hook %s failed: exit %d", hook.Path, hookResult.ExitCode)
 		}
 	}
 

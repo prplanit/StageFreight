@@ -82,7 +82,8 @@ func (c *ComposeBackend) Prepare(ctx context.Context, cfg *config.Config, rctx *
 	invPath := filepath.Join(rctx.RepoRoot, dcfg.Targets.Inventory)
 
 	inv := &AnsibleInventory{Path: invPath}
-	targets, err := inv.Resolve(ctx, dcfg.Targets.Selector)
+	selector := TargetSelector{Groups: dcfg.Targets.Selector.Groups}
+	targets, err := inv.Resolve(ctx, selector)
 	if err != nil {
 		return fmt.Errorf("resolving targets: %w", err)
 	}
