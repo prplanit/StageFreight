@@ -509,6 +509,12 @@ commit:
 | `backend` | `backend` | string | Yes | — | string value |
 | `name` | `cluster.name` | string | Yes | — | string value |
 | `server` | `cluster.server` | string | Yes | — | string value |
+| `level` | `cluster.exposure.rules.level` | string | Yes | — | string value |
+| `endpoints` | `cluster.exposure.rules.endpoints` | []string | Yes | — | []string value |
+| `gateways` | `cluster.exposure.rules.gateways` | []string | Yes | — | []string value |
+| `cidrs` | `cluster.exposure.rules.cidrs` | []string | Yes | — | []string value |
+| `ports` | `cluster.exposure.rules.ports` | []int | Yes | — | []int value |
+| `service_types` | `cluster.exposure.rules.service_types` | []string | Yes | — | []string value |
 | `audience` | `oidc.audience` | string | Yes | — | string value |
 
 ---
