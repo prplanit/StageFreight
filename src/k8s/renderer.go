@@ -29,10 +29,10 @@ func exposureIcon(e ExposureLevel) string {
 		return "🌐"
 	case ExposureIntranet:
 		return "🔒"
-	case ExposureLAN:
-		return "📡"
-	default:
+	case ExposureCluster:
 		return "🏠"
+	default:
+		return "❓"
 	}
 }
 
