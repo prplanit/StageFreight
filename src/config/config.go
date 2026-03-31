@@ -40,7 +40,8 @@ type Config struct {
 
 	// Badges defines badge artifact generation (SVGs).
 	// Badge system owns definitions; narrator references them via badge_ref.
-	Badges []BadgeConfig `yaml:"badges"`
+	// Artifact serving location is declared at sources.publish_origin (cross-cutting).
+	Badges BadgesConfig `yaml:"badges"`
 
 	// Narrator defines content composition for file targets.
 	Narrator []NarratorFile `yaml:"narrator"`

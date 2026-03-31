@@ -197,11 +197,40 @@ func Validate(cfg *Config) (warnings []string, err error) {
 		errs = append(errs, werrs...)
 	}
 
+	// ── Sources: publish_origin ──────────────────────────────────────────
+
+	if po := cfg.Sources.PublishOrigin; po != nil {
+		// default_branch is required for forge-based resolution (primary and mirror)
+		if po.Kind == "primary" || po.Kind == "mirror" {
+			if cfg.Sources.Primary.DefaultBranch == "" {
+				errs = append(errs, "sources.primary.default_branch is required when publish_origin is used")
+			}
+		}
+		switch po.Kind {
+		case "primary":
+			if cfg.Sources.Primary.URL == "" {
+				errs = append(errs, "sources.publish_origin (kind: primary): sources.primary.url is required")
+			}
+		case "mirror":
+			if po.Ref == "" {
+				errs = append(errs, "sources.publish_origin (kind: mirror): ref is required")
+			} else if FindMirrorByID(cfg.Sources.Mirrors, po.Ref) == nil {
+				errs = append(errs, fmt.Sprintf("sources.publish_origin ref %q not found in sources.mirrors", po.Ref))
+			}
+		case "url":
+			if po.Base == "" {
+				errs = append(errs, "sources.publish_origin (kind: url): base is required")
+			}
+		default:
+			errs = append(errs, fmt.Sprintf("sources.publish_origin: unknown kind %q (expected primary, mirror, or url)", po.Kind))
+		}
+	}
+
 	// ── Badges ───────────────────────────────────────────────────────────
 
 	badgeIDs := make(map[string]bool)
-	for i, b := range cfg.Badges {
-		bpath := fmt.Sprintf("badges[%d]", i)
+	for i, b := range cfg.Badges.Items {
+		bpath := fmt.Sprintf("badges.items[%d]", i)
 		if b.ID == "" {
 			errs = append(errs, fmt.Sprintf("%s: id is required", bpath))
 		} else if badgeIDs[b.ID] {
@@ -243,6 +272,24 @@ func Validate(cfg *Config) (warnings []string, err error) {
 			ierrs := validateNarratorItem(item, ipath)
 			errs = append(errs, ierrs...)
 		}
+	}
+
+	// ── Cross-validation: badge_ref requires publish_origin ─────────────
+
+	hasBadgeRef := false
+	for _, f := range cfg.Narrator {
+		for _, item := range f.Items {
+			if item.Kind == "badge_ref" {
+				hasBadgeRef = true
+				break
+			}
+		}
+		if hasBadgeRef {
+			break
+		}
+	}
+	if hasBadgeRef && cfg.Sources.PublishOrigin == nil {
+		errs = append(errs, "narrator uses badge_ref but sources.publish_origin is not configured")
 	}
 
 	// ── Commit ────────────────────────────────────────────────────────────

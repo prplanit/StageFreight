@@ -42,18 +42,21 @@ func RunReadmeSection(ctx context.Context, w io.Writer, _ bool, color bool, targ
 
 	var synced, errors int
 
+	// Resolve link bases from sources.publish_origin (once, shared across targets).
+	linkBase, _ := config.ResolveLinkBase(appCfg)
+	rawBase, _ := config.ResolvePublishOrigin(appCfg)
+
 	for _, t := range targets {
 		// Resolve {var:...} templates in target fields
 		resolvedPath := gitver.ResolveVars(t.Path, appCfg.Vars)
 		resolvedDesc := gitver.ResolveVars(t.Description, appCfg.Vars)
-		resolvedLinkBase := gitver.ResolveVars(t.LinkBase, appCfg.Vars)
 
 		file := t.File
 		if file == "" {
 			file = "README.md"
 		}
 
-		content, err := registry.PrepareReadmeFromFile(file, resolvedDesc, resolvedLinkBase, rootDir)
+		content, err := registry.PrepareReadmeFromFile(file, resolvedDesc, linkBase, rawBase, rootDir)
 		if err != nil {
 			errors++
 			continue

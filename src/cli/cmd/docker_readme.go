@@ -69,18 +69,20 @@ func runDockerReadmeImpl(ctx context.Context, appCfg *config.Config, rootDir str
 	color := output.UseColor()
 	w := os.Stdout
 
+	// Resolve link bases from sources.publish_origin (once, shared across targets).
+	linkBase, _ := config.ResolveLinkBase(appCfg)
+	rawBase, _ := config.ResolvePublishOrigin(appCfg)
+
 	// For dry-run, show content from the first target's file
 	if dryRun {
 		t := targets[0]
-		// Resolve {var:...} templates in target fields
 		resolvedDesc := gitver.ResolveVars(t.Description, appCfg.Vars)
-		resolvedLinkBase := gitver.ResolveVars(t.LinkBase, appCfg.Vars)
 
 		file := t.File
 		if file == "" {
 			file = "README.md"
 		}
-		content, err := registry.PrepareReadmeFromFile(file, resolvedDesc, resolvedLinkBase, rootDir)
+		content, err := registry.PrepareReadmeFromFile(file, resolvedDesc, linkBase, rawBase, rootDir)
 		if err != nil {
 			return err
 		}
@@ -96,14 +98,13 @@ func runDockerReadmeImpl(ctx context.Context, appCfg *config.Config, rootDir str
 		// Resolve {var:...} templates in target fields
 		resolvedPath := gitver.ResolveVars(t.Path, appCfg.Vars)
 		resolvedDesc := gitver.ResolveVars(t.Description, appCfg.Vars)
-		resolvedLinkBase := gitver.ResolveVars(t.LinkBase, appCfg.Vars)
 
 		file := t.File
 		if file == "" {
 			file = "README.md"
 		}
 
-		content, err := registry.PrepareReadmeFromFile(file, resolvedDesc, resolvedLinkBase, rootDir)
+		content, err := registry.PrepareReadmeFromFile(file, resolvedDesc, linkBase, rawBase, rootDir)
 		if err != nil {
 			results = append(results, readmeSyncResult{
 				Registry: t.URL + "/" + resolvedPath,

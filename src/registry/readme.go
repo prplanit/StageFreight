@@ -15,8 +15,10 @@ type ReadmeContent struct {
 }
 
 // PrepareReadmeFromFile loads a README file and returns processed content ready for registry sync.
-// Takes individual fields for maximum flexibility — callers resolve config to args.
-func PrepareReadmeFromFile(file, description, linkBase, rootDir string) (*ReadmeContent, error) {
+// linkBase is the blob/page URL base for clickable links.
+// rawBase is the raw content URL base for embedded images.
+// Both are resolved from sources.publish_origin by the caller.
+func PrepareReadmeFromFile(file, description, linkBase, rawBase, rootDir string) (*ReadmeContent, error) {
 	if file == "" {
 		file = "README.md"
 	}
@@ -32,9 +34,9 @@ func PrepareReadmeFromFile(file, description, linkBase, rootDir string) (*Readme
 	}
 	content := string(raw)
 
-	// Rewrite relative links if link_base is set
-	if linkBase != "" {
-		content = rewriteRelativeLinks(content, linkBase)
+	// Rewrite relative links and images to absolute URLs.
+	if linkBase != "" || rawBase != "" {
+		content = rewriteRelativeLinks(content, linkBase, rawBase)
 	}
 
 	// Generate short description
@@ -78,9 +80,9 @@ var (
 	htmlHrefPattern   = regexp.MustCompile(`(?i)(\bhref=["'])([^"']+)(["'])`)
 )
 
-func rewriteRelativeLinks(content, linkBase string) string {
+func rewriteRelativeLinks(content, linkBase, rawBase string) string {
 	linkBase = strings.TrimRight(linkBase, "/")
-	rawBase := DeriveRawBase(linkBase)
+	rawBase = strings.TrimRight(rawBase, "/")
 
 	isRelative := func(s string) bool {
 		if s == "" {
@@ -141,33 +143,6 @@ func rewriteRelativeLinks(content, linkBase string) string {
 	})
 
 	return content
-}
-
-// DeriveRawBase auto-derives a raw file URL base from a link_base URL.
-// Supports GitHub, GitLab, and Gitea URL patterns.
-func DeriveRawBase(linkBase string) string {
-	if linkBase == "" {
-		return ""
-	}
-
-	// GitHub: github.com/{owner}/{repo}/blob/{branch} → raw.githubusercontent.com/{owner}/{repo}/{branch}
-	if strings.Contains(linkBase, "github.com/") {
-		s := strings.Replace(linkBase, "github.com/", "raw.githubusercontent.com/", 1)
-		s = strings.Replace(s, "/blob/", "/", 1)
-		return s
-	}
-
-	// GitLab: gitlab.com/{owner}/{repo}/-/blob/{branch} → gitlab.com/{owner}/{repo}/-/raw/{branch}
-	if strings.Contains(linkBase, "/-/blob/") {
-		return strings.Replace(linkBase, "/-/blob/", "/-/raw/", 1)
-	}
-
-	// Gitea: {host}/{owner}/{repo}/src/branch/{branch} → {host}/{owner}/{repo}/raw/branch/{branch}
-	if strings.Contains(linkBase, "/src/branch/") {
-		return strings.Replace(linkBase, "/src/branch/", "/raw/branch/", 1)
-	}
-
-	return ""
 }
 
 // extractFirstParagraph returns the first prose paragraph from markdown content.

@@ -63,13 +63,40 @@ func RunNarrator(appCfg *config.Config, rootDir string, dryRun bool, isVerbose b
 		fmt.Fprintf(os.Stderr, "  warning: version detection failed: %v\n", err)
 	}
 
+	// Resolve publish_origin for badge_ref image URLs and link resolution.
+	// Only hard-fail if badge_ref items actually exist.
+	publishBase, poErr := config.ResolvePublishOrigin(appCfg)
+	if poErr != nil {
+		hasBadgeRef := false
+		for _, f := range appCfg.Narrator {
+			for _, item := range f.Items {
+				if item.Kind == "badge_ref" {
+					hasBadgeRef = true
+					break
+				}
+			}
+			if hasBadgeRef {
+				break
+			}
+		}
+		if hasBadgeRef {
+			return fmt.Errorf("badge_ref resolution: %w", poErr)
+		}
+		publishBase = "" // no badge_refs, resolution not needed
+	}
+
+	// Derive link base (blob URLs) from the same publish_origin.
+	// Replaces per-file link_base — topology is declared once in sources.
+	linkBase, _ := config.ResolveLinkBase(appCfg)
+	// Empty linkBase is fine — relative links stay relative.
+
 	start := time.Now()
 	color := output.UseColor()
 	w := os.Stdout
 
 	var results []narratorFileResult
 	for _, fileCfg := range appCfg.Narrator {
-		result, content, err := processNarratorFile(appCfg, fileCfg, rootDir, versionInfo, isVerbose, dryRun)
+		result, content, err := processNarratorFile(appCfg, fileCfg, rootDir, versionInfo, linkBase, publishBase, isVerbose, dryRun)
 		if err != nil {
 			return err
 		}
@@ -127,19 +154,11 @@ type placementGroup struct {
 	Items []config.NarratorItem
 }
 
-func processNarratorFile(appCfg *config.Config, fileCfg config.NarratorFile, rootDir string, vi *gitver.VersionInfo, verbose bool, dryRun bool) (narratorFileResult, string, error) {
+func processNarratorFile(appCfg *config.Config, fileCfg config.NarratorFile, rootDir string, vi *gitver.VersionInfo, linkBase string, rawBase string, verbose bool, dryRun bool) (narratorFileResult, string, error) {
 	path := fileCfg.File
 	if !filepath.IsAbs(path) {
 		path = filepath.Join(rootDir, path)
 	}
-
-	// Resolve URL bases from per-file config.
-	linkBase := strings.TrimRight(gitver.ResolveVars(fileCfg.LinkBase, appCfg.Vars), "/")
-	rawBase := ""
-	if linkBase != "" {
-		rawBase = registry.DeriveRawBase(linkBase)
-	}
-	rawBase = strings.TrimRight(rawBase, "/")
 
 	// Read existing file (or start empty).
 	content := ""
@@ -285,8 +304,8 @@ func buildModulesV2(appCfg *config.Config, items []config.NarratorItem, linkBase
 
 	// Build badge lookup map for badge_ref resolution.
 	// Map enforces uniqueness and O(1) lookup.
-	badgeMap := make(map[string]config.BadgeConfig, len(appCfg.Badges))
-	for _, b := range appCfg.Badges {
+	badgeMap := make(map[string]config.BadgeConfig, len(appCfg.Badges.Items))
+	for _, b := range appCfg.Badges.Items {
 		badgeMap[b.ID] = b
 	}
 

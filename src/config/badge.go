@@ -1,5 +1,12 @@
 package config
 
+// BadgesConfig is the top-level badges configuration.
+// Badge system owns definitions; narrator references them via badge_ref.
+// Artifact serving location is declared at sources.publish_origin (cross-cutting).
+type BadgesConfig struct {
+	Items []BadgeConfig `yaml:"items"`
+}
+
 // BadgeConfig is the user-facing badge definition in .stagefreight.yml.
 // Badge system owns this — narrator references badges by ID via badge_ref.
 type BadgeConfig struct {

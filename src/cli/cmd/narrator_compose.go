@@ -78,15 +78,9 @@ func runNarratorCompose(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "  warning: version detection failed: %v\n", err)
 	}
 
-	// Resolve URL bases from the first narrator file entry (if available).
-	var linkBase, rawBase string
-	if len(cfg.Narrator) > 0 {
-		linkBase = strings.TrimRight(gitver.ResolveVars(cfg.Narrator[0].LinkBase, cfg.Vars), "/")
-		if linkBase != "" {
-			rawBase = registry.DeriveRawBase(linkBase)
-		}
-		rawBase = strings.TrimRight(rawBase, "/")
-	}
+	// Resolve URL bases from sources.publish_origin.
+	rawBase, _ := config.ResolvePublishOrigin(cfg)
+	linkBase, _ := config.ResolveLinkBase(cfg)
 
 	// Parse CLI items into v2 NarratorItems.
 	items, err := parseCLIItems(args)

@@ -135,9 +135,9 @@ func generateConfigBadgesImpl(eng *badge.Engine, appCfg *config.Config, rootDir 
 	items := postbuild.CollectNarratorBadgeItems(appCfg)
 
 	// Add badges from top-level config (sorted by ID for deterministic generation).
-	if len(appCfg.Badges) > 0 {
-		sorted := make([]config.BadgeConfig, len(appCfg.Badges))
-		copy(sorted, appCfg.Badges)
+	if len(appCfg.Badges.Items) > 0 {
+		sorted := make([]config.BadgeConfig, len(appCfg.Badges.Items))
+		copy(sorted, appCfg.Badges.Items)
 		sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })
 		for _, b := range sorted {
 			items = append(items, config.NarratorItem{
