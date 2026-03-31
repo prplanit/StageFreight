@@ -14,8 +14,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 )
@@ -31,24 +29,8 @@ const (
 
 // Discover queries the live cluster and returns a complete DiscoveryResult.
 // ObservedAt is captured once at start. Uses client-go directly.
-func Discover(ctx context.Context, catalogPath, repoRoot string, exposureRules config.ExposureRules) (*DiscoveryResult, error) {
+func Discover(ctx context.Context, client *Client, catalogPath, repoRoot string, exposureRules config.ExposureRules) (*DiscoveryResult, error) {
 	observedAt := time.Now()
-
-	// Build Kubernetes client
-	config, clusterName, err := buildConfig()
-	if err != nil {
-		return nil, fmt.Errorf("k8s-inventory requires Kubernetes API access at render time; %w", err)
-	}
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, fmt.Errorf("creating kubernetes client: %w", err)
-	}
-
-	gwClient, err := gatewayclient.NewForConfig(config)
-	if err != nil {
-		return nil, fmt.Errorf("creating gateway-api client: %w", err)
-	}
 
 	// Load catalog
 	catalog, err := LoadCatalog(catalogPath)
@@ -57,7 +39,7 @@ func Discover(ctx context.Context, catalogPath, repoRoot string, exposureRules c
 	}
 
 	// Phase 1: Discover workloads (only seeds)
-	groups, err := discoverWorkloads(ctx, clientset)
+	groups, err := discoverWorkloads(ctx, client.Clientset)
 	if err != nil {
 		return nil, err
 	}
@@ -67,12 +49,12 @@ func Discover(ctx context.Context, catalogPath, repoRoot string, exposureRules c
 	groupByPrefix(groups)
 
 	// Phase 2: Augment with services
-	if err := augmentServices(ctx, clientset, groups); err != nil {
+	if err := augmentServices(ctx, client.Clientset, groups); err != nil {
 		return nil, err
 	}
 
 	// Phase 3: Augment with HTTPRoutes
-	if err := augmentHTTPRoutes(ctx, gwClient, clientset, groups); err != nil {
+	if err := augmentHTTPRoutes(ctx, client.GatewayClient, client.Clientset, groups); err != nil {
 		// Gateway API may not be installed — log but don't fail
 		_ = err
 	}
@@ -109,12 +91,12 @@ func Discover(ctx context.Context, catalogPath, repoRoot string, exposureRules c
 	allActive := append(apps, platform...)
 	var graveyard []GraveyardEntry
 
-	if repoRoot != "" && clusterName != "" {
-		manifest, err := LoadManifest(repoRoot, clusterName)
+	if repoRoot != "" && client.ClusterName != "" {
+		manifest, err := LoadManifest(repoRoot, client.ClusterName)
 		if err == nil {
 			changed := ReconcileLifecycle(manifest, allActive, true, observedAt)
 			if changed {
-				_ = SaveManifest(repoRoot, clusterName, manifest)
+				_ = SaveManifest(repoRoot, client.ClusterName, manifest)
 			}
 			graveyard = GraveyardFromManifest(manifest)
 		}
@@ -125,29 +107,8 @@ func Discover(ctx context.Context, catalogPath, repoRoot string, exposureRules c
 		Platform:   platform,
 		Graveyard:  graveyard,
 		ObservedAt: observedAt,
-		Cluster:    clusterName,
+		Cluster:    client.ClusterName,
 	}, nil
-}
-
-// buildConfig creates a Kubernetes REST config from kubeconfig or in-cluster.
-func buildConfig() (*rest.Config, string, error) {
-	// Try KUBECONFIG / default kubeconfig path
-	rules := clientcmd.NewDefaultClientConfigLoadingRules()
-	overrides := &clientcmd.ConfigOverrides{}
-	kubeConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(rules, overrides)
-
-	config, err := kubeConfig.ClientConfig()
-	if err == nil {
-		rawConfig, _ := kubeConfig.RawConfig()
-		return config, rawConfig.CurrentContext, nil
-	}
-
-	// Fallback: in-cluster
-	config, err = rest.InClusterConfig()
-	if err != nil {
-		return nil, "", fmt.Errorf("no valid kubeconfig or in-cluster credentials available")
-	}
-	return config, "in-cluster", nil
 }
 
 // appGroup accumulates resources for a single app identity during discovery.
