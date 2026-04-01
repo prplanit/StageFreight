@@ -34,7 +34,7 @@ Generated sections below are assembled from `docs/modules/cli-reference.md` via 
 - [`stagefreight component`](#cli-stagefreight-component) — GitLab CI component management
 - [`stagefreight component docs`](#cli-stagefreight-component-docs) — Generate input documentation from component spec files
 - [`stagefreight config`](#cli-stagefreight-config) — Inspect and manage StageFreight configuration
-- [`stagefreight config render`](#cli-stagefreight-config-render) — Show the fully merged effective config
+- [`stagefreight config render`](#cli-stagefreight-config-render) — Show the effective config after preset resolution
 - [`stagefreight config resolve`](#cli-stagefreight-config-resolve) — Show the config resolution chain with provenance
 - [`stagefreight dependency`](#cli-stagefreight-dependency) — Dependency management commands
 - [`stagefreight dependency update`](#cli-stagefreight-dependency-update) — Update outdated dependencies
@@ -601,7 +601,7 @@ Commands for inspecting resolved config, rendering effective config, and managin
 
 **Subcommands:**
 
-- [`render`](#cli-stagefreight-config-render) — Show the fully merged effective config
+- [`render`](#cli-stagefreight-config-render) — Show the effective config after preset resolution
 - [`resolve`](#cli-stagefreight-config-resolve) — Show the config resolution chain with provenance
 
 **See also:** [`stagefreight`](#cli-stagefreight) · [`stagefreight config render`](#cli-stagefreight-config-render) · [`stagefreight config resolve`](#cli-stagefreight-config-resolve)
@@ -613,9 +613,9 @@ Commands for inspecting resolved config, rendering effective config, and managin
 
 **Usage:** `stagefreight config render render`
 
-Renders the effective StageFreight config after merging managed + local files.
+Renders the effective StageFreight config from .stagefreight.yml.
 
-Without --gated: shows merged config (what config declares).
+Without --gated: shows config after preset resolution (what config declares).
 With --gated: shows runnable plan (what will actually execute after capability gating).
 
 **Flags:**
@@ -641,16 +641,14 @@ With --gated: shows runnable plan (what will actually execute after capability g
 **Usage:** `stagefreight config resolve resolve`
 
 Shows how the effective config was resolved:
-- Which files were loaded (managed, local)
-- How values were merged
-- What overrode what
+- Preset sources and what they contributed
 - Source provenance for each value
 
 **Flags:**
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `-v, --verbose` | bool | — | Show full merge trace |
+| `-v, --verbose` | bool | — | Show full resolution trace |
 
 **Inherited flags:**
 

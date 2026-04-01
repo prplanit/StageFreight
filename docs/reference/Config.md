@@ -36,6 +36,7 @@ Generated sections below are assembled from `docs/modules/config-reference.md` v
 - [`manifest`](#config-manifest)
 - [`release`](#config-release)
 - [`lifecycle`](#config-lifecycle)
+- [`governance`](#config-governance)
 - [`gitops`](#config-gitops)
 - [`docker`](#config-docker)
 - [`glossary`](#config-glossary)
@@ -519,6 +520,21 @@ commit:
 | Name | YAML Key | Type | Required | Default | Description |
 |------|----------|------|----------|---------|-------------|
 | `mode` | `mode` | string | Yes | — | string value |
+
+---
+
+<a id="config-governance" name="config-governance"></a>
+### governance
+
+| Name | YAML Key | Type | Required | Default | Description |
+|------|----------|------|----------|---------|-------------|
+| `repo_url` | `skeleton.source.repo_url` | string | Yes | — | string value |
+| `path` | `skeleton.source.path` | string | Yes | — | string value |
+| `ref` | `skeleton.source.ref` | string | Yes | — | string value |
+| `allow_floating` | `skeleton.source.allow_floating` | bool | Yes | — | bool value |
+| `id` | `clusters.id` | string | Yes | — | string value |
+| `repos` | `clusters.targets.repos` | []string | Yes | — | []string value |
+| `stagefreight` | `clusters.stagefreight` | map[string]any | Yes | — | map[string]any value |
 
 ---
 
