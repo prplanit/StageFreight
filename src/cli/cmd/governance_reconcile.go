@@ -68,23 +68,46 @@ func runGovernanceReconcile(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "  cluster %q: %d repos\n", c.ID, len(c.Targets.Repos))
 	}
 
-	// Phase 2: Load skeleton (if configured).
-	var skeleton []byte
-	if gov.Skeleton.Source.RepoURL != "" {
-		fmt.Fprintf(os.Stderr, "\nSkeleton source: %s @ %s path=%s\n",
-			gov.Skeleton.Source.RepoURL, gov.Skeleton.Source.Ref, gov.Skeleton.Source.Path)
+	// Phase 2: Build skeleton resolver (per-cluster with global fallback).
+	globalSkel := gov.Skeleton.Source
+	skeletonCache := map[string][]byte{} // cache by "repoURL@ref:path"
 
-		skeletonData, err := governance.FetchFile(
-			gov.Skeleton.Source.RepoURL,
-			gov.Skeleton.Source.Ref,
-			gov.Skeleton.Source.Path,
-		)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "  skeleton fetch failed: %v\n", err)
-		} else {
-			skeleton = skeletonData
-			fmt.Fprintf(os.Stderr, "  skeleton loaded: %d bytes\n", len(skeleton))
+	skeletonResolver := func(cluster governance.Cluster) ([]byte, error) {
+		// Per-cluster override: merge with global (cluster overrides non-empty fields).
+		ref := governance.SkeletonRef{
+			RepoURL: globalSkel.RepoURL,
+			Ref:     globalSkel.Ref,
+			Path:    globalSkel.Path,
 		}
+		if cluster.Skeleton.Source.Path != "" {
+			ref.Path = cluster.Skeleton.Source.Path
+		}
+		if cluster.Skeleton.Source.RepoURL != "" {
+			ref.RepoURL = cluster.Skeleton.Source.RepoURL
+		}
+		if cluster.Skeleton.Source.Ref != "" {
+			ref.Ref = cluster.Skeleton.Source.Ref
+		}
+
+		if ref.RepoURL == "" || ref.Path == "" {
+			return nil, nil // no skeleton configured
+		}
+
+		cacheKey := ref.RepoURL + "@" + ref.Ref + ":" + ref.Path
+		if cached, ok := skeletonCache[cacheKey]; ok {
+			return cached, nil
+		}
+
+		fmt.Fprintf(os.Stderr, "  skeleton: %s @ %s path=%s (cluster %s)\n",
+			ref.RepoURL, ref.Ref, ref.Path, cluster.ID)
+
+		data, err := governance.FetchFile(ref.RepoURL, ref.Ref, ref.Path)
+		if err != nil {
+			return nil, fmt.Errorf("fetching skeleton: %w", err)
+		}
+
+		skeletonCache[cacheKey] = data
+		return data, nil
 	}
 
 	// Phase 3: Load auxiliary files (claude-code settings, etc.).
@@ -121,7 +144,7 @@ func runGovernanceReconcile(cmd *cobra.Command, args []string) error {
 	}
 
 	plans, err := governance.PlanDistribution(
-		gov, presetLoader, skeleton, auxFiles,
+		gov, presetLoader, skeletonResolver, auxFiles,
 		forgeReader,
 		presetSource, sourceIdentity,
 	)

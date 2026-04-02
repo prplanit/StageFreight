@@ -33,9 +33,10 @@ type SkeletonRef struct {
 // Cluster assigns lifecycle doctrine to a group of repos.
 // The StageFreight block is normal StageFreight config — same grammar.
 type Cluster struct {
-	ID      string         `yaml:"id"`
-	Targets ClusterTargets `yaml:"targets"`
-	Config  map[string]any `yaml:"stagefreight"` // raw StageFreight config
+	ID       string         `yaml:"id"`
+	Skeleton SkeletonSource `yaml:"skeleton"` // per-cluster override; inherits from global if empty
+	Targets  ClusterTargets `yaml:"targets"`
+	Config   map[string]any `yaml:"stagefreight"` // raw StageFreight config
 }
 
 // ClusterTargets identifies which repos belong to this cluster.

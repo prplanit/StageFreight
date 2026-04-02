@@ -20,10 +20,14 @@ type PresetSourceInfo struct {
 	CachePolicy string // "authoritative" or "advisory"
 }
 
+// SkeletonResolver fetches skeleton content for a cluster.
+// Uses per-cluster skeleton source if set, falls back to global.
+type SkeletonResolver func(cluster Cluster) ([]byte, error)
+
 func PlanDistribution(
 	gov *GovernanceConfig,
 	presetLoader PresetLoader,
-	skeleton []byte,
+	skeletonResolver SkeletonResolver,
 	auxFiles map[string][]byte,
 	forgeReader ForgeReader,
 	presetSource PresetSourceInfo,
@@ -84,13 +88,19 @@ func PlanDistribution(
 				))
 			}
 
-			// CI skeleton (if configured).
-			if len(skeleton) > 0 {
-				plan.Files = append(plan.Files, planFile(
-					forgeReader, repo,
-					".gitlab-ci.yml",
-					skeleton,
-				))
+			// CI skeleton — per-cluster variant via resolver.
+			if skeletonResolver != nil {
+				skeletonBytes, err := skeletonResolver(cluster)
+				if err != nil {
+					return nil, fmt.Errorf("cluster %q: resolving skeleton: %w", cluster.ID, err)
+				}
+				if len(skeletonBytes) > 0 {
+					plan.Files = append(plan.Files, planFile(
+						forgeReader, repo,
+						".gitlab-ci.yml",
+						skeletonBytes,
+					))
+				}
 			}
 
 			// Auxiliary files (claude-code settings, precommit, etc.).

@@ -27,9 +27,10 @@ type GovernanceSkeletonSource struct {
 
 // GovernanceCluster assigns lifecycle doctrine to a group of repos.
 type GovernanceCluster struct {
-	ID           string                  `yaml:"id"`
-	Targets      GovernanceClusterTargets `yaml:"targets"`
-	StageFreight map[string]any          `yaml:"stagefreight"`
+	ID           string                     `yaml:"id"`
+	Skeleton     GovernanceSkeletonConfig   `yaml:"skeleton"`  // per-cluster override; inherits from global
+	Targets      GovernanceClusterTargets   `yaml:"targets"`
+	StageFreight map[string]any             `yaml:"stagefreight"`
 }
 
 // GovernanceClusterTargets identifies which repos belong to this cluster.
