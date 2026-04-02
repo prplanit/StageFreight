@@ -625,7 +625,16 @@ func releaseRunner(ctx context.Context, appCfg *config.Config, ciCtx *ci.CIConte
 		tag = ciCtx.Tag
 	}
 	if tag == "" {
-		return fmt.Errorf("release subsystem: no tag available (set SF_CI_TAG or pass --tag)")
+		fmt.Println("  release: skipped — no tag context")
+		if ciCtx.IsCI() {
+			if err := cistate.UpdateState(rootDir, func(st *cistate.State) {
+				st.Release.Skipped = true
+				st.Release.Reason = "no tag context"
+			}); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: pipeline state write failed: %v\n", err)
+			}
+		}
+		return nil
 	}
 
 	// Policy gate: check if tag matches ANY release target's when conditions.
