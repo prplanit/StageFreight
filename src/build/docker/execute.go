@@ -94,10 +94,12 @@ func executePhase(req Request) pipeline.Phase {
 			output.SectionStart(pc.Writer, "sf_build", "Build")
 			buildStart := time.Now()
 
-			// Always capture output for structured display; verbose forwards stderr in real-time
+			// Always capture output for structured display; verbose forwards stderr in real-time.
+			// Capture BOTH stdout and stderr — docker buildx writes compile errors to stdout
+			// (progress stream) while docker-level errors go to stderr.
 			bx := NewBuildx(pc.Verbose)
-			var stderrBuf bytes.Buffer
-			bx.Stdout = io.Discard
+			var stderrBuf, stdoutBuf bytes.Buffer
+			bx.Stdout = &stdoutBuf
 			if pc.Verbose {
 				bx.Stderr = req.Stderr
 			} else {
@@ -140,6 +142,7 @@ func executePhase(req Request) pipeline.Phase {
 			var result build.BuildResult
 			for _, step := range plan.Steps {
 				stderrBuf.Reset()
+				stdoutBuf.Reset()
 				stepResult, layers, err := bx.BuildWithLayers(pc.Ctx, step)
 				if stepResult == nil {
 					stepResult = &build.StepResult{Name: step.Name, Status: "failed"}
@@ -152,12 +155,13 @@ func executePhase(req Request) pipeline.Phase {
 					failure := postbuild.PushFailure{
 						Err:      err,
 						ExitCode: extractExitCode(err),
-						Stderr:   stderrBuf.String(),
+						Stderr:   stdoutBuf.String() + "\n" + stderrBuf.String(),
 					}
 					recovery := postbuild.RecoverPushFailure(pc.Ctx, step.Registries, failure)
 					if recovery.Retry {
 						diag.Info(recovery.Message)
 						stderrBuf.Reset()
+						stdoutBuf.Reset()
 						stepResult, layers, err = bx.BuildWithLayers(pc.Ctx, step)
 						if stepResult == nil {
 							stepResult = &build.StepResult{Name: step.Name, Status: "failed"}
@@ -174,16 +178,19 @@ func executePhase(req Request) pipeline.Phase {
 					output.RowStatus(failSec, "status", "build failed", "failed", pc.Color)
 
 					// Semantic error extraction — shared contract via errsurface.go.
-					RenderBuildError(failSec, stderrBuf.String())
+					// Combine stdout + stderr: docker buildx writes compile errors
+					// to stdout (progress stream), docker-level errors to stderr.
+					combinedOutput := stdoutBuf.String() + "\n" + stderrBuf.String()
+					RenderBuildError(failSec, combinedOutput)
 
 					failSec.Close()
 
 					if pc.CI {
 						output.SectionStartCollapsed(pc.Writer, "sf_build_raw", "Build Output (raw)")
-						fmt.Fprint(pc.Writer, stderrBuf.String())
+						fmt.Fprint(pc.Writer, combinedOutput)
 						output.SectionEnd(pc.Writer, "sf_build_raw")
 					} else if pc.Verbose {
-						fmt.Fprint(req.Stderr, stderrBuf.String())
+						fmt.Fprint(req.Stderr, combinedOutput)
 					}
 
 					output.SectionEnd(pc.Writer, "sf_build")
@@ -196,7 +203,7 @@ func executePhase(req Request) pipeline.Phase {
 							Command:  fmt.Sprintf("docker buildx build %s", step.Name),
 							ExitCode: 1,
 							Reason:   "build failed",
-							Stderr:   stderrBuf.String(),
+							Stderr:   stdoutBuf.String() + "\n" + stderrBuf.String(),
 						},
 					}, err
 				}

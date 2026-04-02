@@ -184,8 +184,8 @@ func runCrucibleMode(req Request) error {
 	buildStart := time.Now()
 
 	bx := NewBuildx(req.Verbose)
-	var stderrBuf bytes.Buffer
-	bx.Stdout = io.Discard
+	var stderrBuf, stdoutBuf bytes.Buffer
+	bx.Stdout = &stdoutBuf
 	if req.Verbose {
 		bx.Stderr = req.Stderr
 	} else {
@@ -194,6 +194,8 @@ func runCrucibleMode(req Request) error {
 
 	var gestResult build.BuildResult
 	for _, step := range plan.Steps {
+		stdoutBuf.Reset()
+		stderrBuf.Reset()
 		stepResult, layers, err := bx.BuildWithLayers(ctx, step)
 		if stepResult == nil {
 			stepResult = &build.StepResult{Name: step.Name, Status: "failed"}
@@ -207,7 +209,8 @@ func runCrucibleMode(req Request) error {
 			output.RowStatus(failSec, "status", "build failed", "failed", color)
 
 			// Semantic error extraction — shared contract via errsurface.go.
-			RenderBuildError(failSec, stderrBuf.String())
+			combinedOutput := stdoutBuf.String() + "\n" + stderrBuf.String()
+			RenderBuildError(failSec, combinedOutput)
 
 			failSec.Close()
 			return fmt.Errorf("gestation build failed: %w", err)
