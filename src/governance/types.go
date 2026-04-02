@@ -115,8 +115,8 @@ type DistributionPlan struct {
 type DistributedFile struct {
 	Path    string // e.g., ".stagefreight/stagefreight-managed.yml"
 	Content []byte
-	Action  string // "create", "update", "replace-drifted", "unchanged"
-	Drifted bool   // true if existing file differs from expected (manual edit detected)
+	Action  string // "create", "replace", "unchanged", "delete"
+	Drifted bool   // true if existing file differs from governance intent
 }
 
 // CommitResult records what happened for each repo during distribution.
