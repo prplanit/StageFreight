@@ -114,6 +114,15 @@ func buildRunner(ctx context.Context, appCfg *config.Config, ciCtx *ci.CIContext
 
 	if !hasBinaryBuilds && !hasDockerBuilds {
 		fmt.Fprintln(os.Stderr, "build: no builds configured — skipping")
+		if ciCtx.IsCI() {
+			if err := cistate.UpdateState(rootDir, func(st *cistate.State) {
+				st.Build.Completed = true
+				st.Build.ProducedImages = false
+				st.Build.Reason = "no builds configured"
+			}); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: pipeline state write failed: %v\n", err)
+			}
+		}
 		return nil
 	}
 
