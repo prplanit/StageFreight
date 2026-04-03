@@ -94,6 +94,10 @@ func executePhase(req Request) pipeline.Phase {
 			output.SectionStart(pc.Writer, "sf_build", "Build")
 			buildStart := time.Now()
 
+			// Render cache resolution info (resolve in cache.go, render here).
+			cacheInfo := ResolveCacheInfo(pc)
+			RenderCacheInfo(pc.Writer, pc.Color, cacheInfo)
+
 			// Always capture output for structured display; verbose forwards stderr in real-time.
 			// Capture BOTH stdout and stderr — docker buildx writes compile errors to stdout
 			// (progress stream) while docker-level errors go to stderr.

@@ -33,8 +33,24 @@ type BuildStep struct {
 	Push         bool             // --push to registries
 	SavePath     string           // save image tarball here after build (for security scanning)
 	MetadataFile string           // temp file for buildx --metadata-file (digest capture)
-	CacheFrom    []string         // --cache-from flags (e.g. "type=registry,ref=...")
-	CacheTo      []string         // --cache-to flags (e.g. "type=registry,ref=...,mode=max")
+	CacheFrom    []CacheRef        // --cache-from references
+	CacheTo      []CacheRef        // --cache-to references
+}
+
+// CacheRef is a structured build cache reference.
+type CacheRef struct {
+	Type string // "registry", "local"
+	Ref  string // registry ref or local path
+	Mode string // "max", "min" (cache-to only)
+}
+
+// Flag renders the CacheRef as a buildx --cache-from/--cache-to value.
+func (c CacheRef) Flag() string {
+	f := "type=" + c.Type + ",ref=" + c.Ref
+	if c.Mode != "" {
+		f += ",mode=" + c.Mode
+	}
+	return f
 }
 
 // ExtractRule defines a file to extract from a build container.

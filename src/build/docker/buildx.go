@@ -185,10 +185,10 @@ func (bx *Buildx) buildArgs(step build.BuildStep) []string {
 
 	// Cache flags
 	for _, cf := range step.CacheFrom {
-		args = append(args, "--cache-from", cf)
+		args = append(args, "--cache-from", cf.Flag())
 	}
 	for _, ct := range step.CacheTo {
-		args = append(args, "--cache-to", ct)
+		args = append(args, "--cache-to", ct.Flag())
 	}
 
 	// Build context

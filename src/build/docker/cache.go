@@ -3,11 +3,16 @@ package docker
 import (
 	"crypto/sha256"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
+	"github.com/PrPlanIT/StageFreight/src/build"
+	"github.com/PrPlanIT/StageFreight/src/build/pipeline"
 	"github.com/PrPlanIT/StageFreight/src/config"
+	"github.com/PrPlanIT/StageFreight/src/output"
 )
 
 // CacheResolution records what was checked during cache setup.
@@ -28,7 +33,7 @@ type CacheResolution struct {
 //   - Fallback never in cache-to (read-only)
 //   - Ref canonicalization: normalized prefix + hash suffix
 //   - Precedence ordering: local before external in cache-from list
-func BuildCacheFlags(cfg config.BuildCacheConfig, repoID, branch string, targets []config.TargetConfig) (cacheFrom, cacheTo []string) {
+func BuildCacheFlags(cfg config.BuildCacheConfig, repoID, branch string, targets []config.TargetConfig) (cacheFrom, cacheTo []build.CacheRef) {
 	if !cfg.IsActive() {
 		return nil, nil
 	}
@@ -49,15 +54,15 @@ func BuildCacheFlags(cfg config.BuildCacheConfig, repoID, branch string, targets
 	return nil, nil
 }
 
-// localFlags returns BuildKit local cache flags.
-func localFlags(repoID string) (cacheFrom, cacheTo []string) {
+// localFlags returns BuildKit local cache refs.
+func localFlags(repoID string) (cacheFrom, cacheTo []build.CacheRef) {
 	dir := LocalCacheDir(repoID)
-	return []string{fmt.Sprintf("type=local,src=%s", dir)},
-		[]string{fmt.Sprintf("type=local,dest=%s,mode=max", dir)}
+	return []build.CacheRef{{Type: "local", Ref: dir}},
+		[]build.CacheRef{{Type: "local", Ref: dir, Mode: "max"}}
 }
 
-// externalFlags returns BuildKit registry cache flags.
-func externalFlags(ext config.ExternalCacheConfig, repoID, branch string, targets []config.TargetConfig) (cacheFrom, cacheTo []string) {
+// externalFlags returns BuildKit registry cache refs.
+func externalFlags(ext config.ExternalCacheConfig, repoID, branch string, targets []config.TargetConfig) (cacheFrom, cacheTo []build.CacheRef) {
 	if ext.Target == "" || ext.Path == "" {
 		return nil, nil
 	}
@@ -77,14 +82,14 @@ func externalFlags(ext config.ExternalCacheConfig, repoID, branch string, target
 	branchRef := fmt.Sprintf("%s/%s/%s/%s", baseURL, ext.Path, repo, br)
 
 	// cache-from: branch first, then fallback.
-	cacheFrom = []string{fmt.Sprintf("type=registry,ref=%s", branchRef)}
+	cacheFrom = []build.CacheRef{{Type: "registry", Ref: branchRef}}
 	if ext.Fallback != "" && ext.Fallback != branch {
 		fallbackRef := fmt.Sprintf("%s/%s/%s/%s", baseURL, ext.Path, repo, CanonicalizeRef(ext.Fallback))
-		cacheFrom = append(cacheFrom, fmt.Sprintf("type=registry,ref=%s", fallbackRef))
+		cacheFrom = append(cacheFrom, build.CacheRef{Type: "registry", Ref: fallbackRef})
 	}
 
 	// cache-to: branch only. Never fallback. Caller gates on build success.
-	cacheTo = []string{fmt.Sprintf("type=registry,ref=%s,mode=%s", branchRef, mode)}
+	cacheTo = []build.CacheRef{{Type: "registry", Ref: branchRef, Mode: mode}}
 
 	return cacheFrom, cacheTo
 }
@@ -137,6 +142,93 @@ func CanonicalizeRef(s string) string {
 	}
 
 	return prefix + "-" + suffix
+}
+
+// CacheInfo holds resolved cache state for rendering.
+// Computed once, rendered by execute.go — cache.go does not render.
+type CacheInfo struct {
+	Mode     string
+	Branch   string
+	Fallback string
+	Imports  []string // deduped, ordered
+	Exports  []string // deduped, ordered
+}
+
+// ResolveCacheInfo computes the cache rendering info from the pipeline context.
+func ResolveCacheInfo(pc *pipeline.PipelineContext) CacheInfo {
+	cfg := pc.Config.BuildCache
+	info := CacheInfo{
+		Mode: cfg.Mode,
+	}
+
+	if !cfg.IsActive() {
+		info.Mode = "off"
+		return info
+	}
+
+	// Branch context from CI env.
+	info.Branch = os.Getenv("SF_CI_BRANCH")
+	if info.Branch == "" {
+		info.Branch = os.Getenv("CI_COMMIT_BRANCH")
+	}
+	info.Fallback = cfg.External.Fallback
+	if info.Fallback == "" {
+		info.Fallback = os.Getenv("SF_CI_DEFAULT_BRANCH")
+	}
+
+	// Collect and dedupe refs from all steps.
+	importSeen := map[string]struct{}{}
+	exportSeen := map[string]struct{}{}
+
+	if pc.BuildPlan != nil {
+		for _, step := range pc.BuildPlan.Steps {
+			for _, cf := range step.CacheFrom {
+				if _, dup := importSeen[cf.Ref]; !dup {
+					importSeen[cf.Ref] = struct{}{}
+					info.Imports = append(info.Imports, cf.Ref)
+				}
+			}
+			for _, ct := range step.CacheTo {
+				if _, dup := exportSeen[ct.Ref]; !dup {
+					exportSeen[ct.Ref] = struct{}{}
+					info.Exports = append(info.Exports, ct.Ref)
+				}
+			}
+		}
+	}
+
+	sort.Strings(info.Imports)
+	sort.Strings(info.Exports)
+
+	return info
+}
+
+// RenderCacheInfo prints structured cache resolution output.
+// Called from execute.go — cache.go only resolves, execute.go renders.
+func RenderCacheInfo(w io.Writer, color bool, info CacheInfo) {
+	sec := output.NewSection(w, "Cache", 0, color)
+	sec.Row("%-14s%s", "mode", info.Mode)
+
+	if info.Mode == "off" {
+		sec.Close()
+		return
+	}
+
+	if info.Branch != "" {
+		sec.Row("%-14s%s", "branch", info.Branch)
+	}
+	if info.Fallback != "" {
+		sec.Row("%-14s%s", "fallback", info.Fallback)
+	}
+
+	for _, ref := range info.Imports {
+		sec.Row("%-14s%s", "import", ref)
+	}
+	for _, ref := range info.Exports {
+		sec.Row("%-14s%s", "export", ref)
+	}
+
+	sec.Close()
 }
 
 // repoHash returns a hex-encoded hash of a repo identity.
