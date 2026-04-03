@@ -63,28 +63,35 @@ func localFlags(repoID string) (cacheFrom, cacheTo []build.CacheRef) {
 
 // externalFlags returns BuildKit registry cache refs.
 func externalFlags(ext config.ExternalCacheConfig, repoID, branch string, targets []config.TargetConfig) (cacheFrom, cacheTo []build.CacheRef) {
-	if ext.Target == "" || ext.Path == "" {
+	if ext.Target == "" {
 		return nil, nil
 	}
 
-	baseURL := resolveTargetURL(ext.Target, targets)
-	if baseURL == "" {
+	targetRef := resolveTargetRef(ext.Target, targets)
+	if targetRef == "" {
 		return nil, nil
 	}
 
-	repo := CanonicalizeRef(repoID)
+	// Cache refs are tags on the target repo, not sub-paths.
+	// Pattern: <registry>/<org>/<repo>:<prefix>-<branch>
+	// e.g. docker.io/prplanit/stagefreight:cache-main
+	prefix := ext.Path
+	if prefix == "" {
+		prefix = "cache"
+	}
+
 	br := CanonicalizeRef(branch)
 	mode := ext.Mode
 	if mode == "" {
 		mode = "max"
 	}
 
-	branchRef := fmt.Sprintf("%s/%s/%s/%s", baseURL, ext.Path, repo, br)
+	branchRef := fmt.Sprintf("%s:%s-%s", targetRef, prefix, br)
 
 	// cache-from: branch first, then fallback.
 	cacheFrom = []build.CacheRef{{Type: "registry", Ref: branchRef}}
 	if ext.Fallback != "" && ext.Fallback != branch {
-		fallbackRef := fmt.Sprintf("%s/%s/%s/%s", baseURL, ext.Path, repo, CanonicalizeRef(ext.Fallback))
+		fallbackRef := fmt.Sprintf("%s:%s-%s", targetRef, prefix, CanonicalizeRef(ext.Fallback))
 		cacheFrom = append(cacheFrom, build.CacheRef{Type: "registry", Ref: fallbackRef})
 	}
 
@@ -237,11 +244,16 @@ func repoHash(repoID string) string {
 	return fmt.Sprintf("%x", h[:8])
 }
 
-// resolveTargetURL finds the URL for a target ID from the config targets list.
-func resolveTargetURL(targetID string, targets []config.TargetConfig) string {
+// resolveTargetRef finds the full registry repo ref (url/path) for a target ID.
+func resolveTargetRef(targetID string, targets []config.TargetConfig) string {
 	for _, t := range targets {
 		if t.ID == targetID && t.Kind == "registry" {
-			return strings.TrimSuffix(t.URL, "/")
+			url := strings.TrimSuffix(t.URL, "/")
+			path := strings.Trim(t.Path, "/")
+			if path != "" {
+				return url + "/" + path
+			}
+			return url
 		}
 	}
 	return ""
