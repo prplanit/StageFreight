@@ -183,6 +183,14 @@ func (bx *Buildx) buildArgs(step build.BuildStep) []string {
 		args = append(args, "--output", "type=local,dest=.")
 	}
 
+	// Cache flags
+	for _, cf := range step.CacheFrom {
+		args = append(args, "--cache-from", cf)
+	}
+	for _, ct := range step.CacheTo {
+		args = append(args, "--cache-to", ct)
+	}
+
 	// Build context
 	context := step.Context
 	if context == "" {

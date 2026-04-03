@@ -80,6 +80,9 @@ type Config struct {
 	// Docker defines configuration for the docker lifecycle mode.
 	Docker DockerLifecycleConfig `yaml:"docker"`
 
+	// BuildCache defines the build cache subsystem (local, shared, hybrid).
+	BuildCache BuildCacheConfig `yaml:"build_cache"`
+
 	// Glossary defines the repo's shared change-language model.
 	// Consumed by commit authoring, tag planning, and release rendering.
 	Glossary GlossaryConfig `yaml:"glossary"`
@@ -144,6 +147,7 @@ func defaults() *Config {
 		Manifest:     DefaultManifestConfig(),
 		Release:      DefaultReleaseConfig(),
 		GitOps:       DefaultGitOpsConfig(),
+		BuildCache:   DefaultBuildCacheConfig(),
 		Docker:       DefaultDockerLifecycleConfig(),
 		Glossary:     DefaultGlossaryConfig(),
 		Presentation: DefaultPresentationConfig(),

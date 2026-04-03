@@ -78,6 +78,20 @@ func (e *imageEngine) Plan(ctx context.Context, cfgRaw interface{}, det *build.D
 		plan.Steps = append(plan.Steps, *step)
 	}
 
+	// Inject build cache flags from config.
+	if cfg.BuildCache.IsActive() {
+		repoID := resolveRepoID(det, versionInfo)
+		branch := currentBranch
+		if branch == "" {
+			branch = "default"
+		}
+		cacheFrom, cacheTo := BuildCacheFlags(cfg.BuildCache, repoID, branch, cfg.Targets)
+		for i := range plan.Steps {
+			plan.Steps[i].CacheFrom = cacheFrom
+			plan.Steps[i].CacheTo = cacheTo
+		}
+	}
+
 	return plan, nil
 }
 
@@ -265,6 +279,24 @@ func resolveBranch(det *build.Detection, v *build.VersionInfo) string {
 		return b
 	}
 	return ""
+}
+
+// resolveRepoID returns a stable repo identity for cache scoping.
+// Uses CI project path, git remote origin, or directory name as fallback.
+func resolveRepoID(det *build.Detection, v *build.VersionInfo) string {
+	// CI project path (most reliable in CI).
+	if p := os.Getenv("CI_PROJECT_PATH"); p != "" {
+		return p
+	}
+	// Git remote URL.
+	if det.GitInfo != nil && det.GitInfo.Remote != "" {
+		return det.GitInfo.Remote
+	}
+	// Fallback to root dir basename.
+	if det.RootDir != "" {
+		return det.RootDir
+	}
+	return "unknown"
 }
 
 // autoInjectBuildArgs adds VERSION, COMMIT, and BUILD_DATE build args when the

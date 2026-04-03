@@ -33,6 +33,8 @@ type BuildStep struct {
 	Push         bool             // --push to registries
 	SavePath     string           // save image tarball here after build (for security scanning)
 	MetadataFile string           // temp file for buildx --metadata-file (digest capture)
+	CacheFrom    []string         // --cache-from flags (e.g. "type=registry,ref=...")
+	CacheTo      []string         // --cache-to flags (e.g. "type=registry,ref=...,mode=max")
 }
 
 // ExtractRule defines a file to extract from a build container.
