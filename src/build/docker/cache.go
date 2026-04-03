@@ -12,7 +12,6 @@ import (
 	"github.com/PrPlanIT/StageFreight/src/build"
 	"github.com/PrPlanIT/StageFreight/src/build/pipeline"
 	"github.com/PrPlanIT/StageFreight/src/config"
-	"github.com/PrPlanIT/StageFreight/src/gitver"
 	"github.com/PrPlanIT/StageFreight/src/output"
 )
 
@@ -34,7 +33,7 @@ type CacheResolution struct {
 //   - Fallback never in cache-to (read-only)
 //   - Ref canonicalization: normalized prefix + hash suffix
 //   - Precedence ordering: local before external in cache-from list
-func BuildCacheFlags(cfg config.BuildCacheConfig, repoID, branch string, targets []config.TargetConfig, vars map[string]string) (cacheFrom, cacheTo []build.CacheRef) {
+func BuildCacheFlags(cfg config.BuildCacheConfig, repoID, branch string, targets []config.TargetConfig) (cacheFrom, cacheTo []build.CacheRef) {
 	if !cfg.IsActive() {
 		return nil, nil
 	}
@@ -44,11 +43,11 @@ func BuildCacheFlags(cfg config.BuildCacheConfig, repoID, branch string, targets
 		return localFlags(repoID)
 
 	case "shared":
-		return externalFlags(cfg.External, repoID, branch, targets, vars)
+		return externalFlags(cfg.External, repoID, branch, targets)
 
 	case "hybrid":
 		localFrom, localTo := localFlags(repoID)
-		extFrom, extTo := externalFlags(cfg.External, repoID, branch, targets, vars)
+		extFrom, extTo := externalFlags(cfg.External, repoID, branch, targets)
 		return append(localFrom, extFrom...), append(localTo, extTo...)
 	}
 
@@ -63,12 +62,12 @@ func localFlags(repoID string) (cacheFrom, cacheTo []build.CacheRef) {
 }
 
 // externalFlags returns BuildKit registry cache refs.
-func externalFlags(ext config.ExternalCacheConfig, repoID, branch string, targets []config.TargetConfig, vars map[string]string) (cacheFrom, cacheTo []build.CacheRef) {
+func externalFlags(ext config.ExternalCacheConfig, repoID, branch string, targets []config.TargetConfig) (cacheFrom, cacheTo []build.CacheRef) {
 	if ext.Target == "" {
 		return nil, nil
 	}
 
-	targetRef := resolveTargetRef(ext.Target, targets, vars)
+	targetRef := resolveTargetRef(ext.Target, targets)
 	if targetRef == "" {
 		return nil, nil
 	}
@@ -247,14 +246,11 @@ func repoHash(repoID string) string {
 
 // resolveTargetRef finds the full registry repo ref (url/path) for a target ID.
 // Resolves {var:...} templates in the path using the config's Vars map.
-func resolveTargetRef(targetID string, targets []config.TargetConfig, vars map[string]string) string {
+func resolveTargetRef(targetID string, targets []config.TargetConfig) string {
 	for _, t := range targets {
 		if t.ID == targetID && t.Kind == "registry" {
 			url := strings.TrimSuffix(t.URL, "/")
 			path := strings.Trim(t.Path, "/")
-			if vars != nil {
-				path = gitver.ResolveVars(path, vars)
-			}
 			if path != "" {
 				return url + "/" + path
 			}

@@ -130,6 +130,10 @@ func LoadWithWarnings(path string) (*Config, []string, error) {
 		return nil, warnings, fmt.Errorf("validating %s: %w", path, verr)
 	}
 
+	// Normalize: resolve {var:...} templates throughout the config.
+	// All consumers get fully-resolved values — no late binding.
+	Normalize(cfg)
+
 	return cfg, warnings, nil
 }
 
