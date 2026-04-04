@@ -7,8 +7,6 @@
 package atomicfile
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -57,35 +55,15 @@ func WriteFile(path string, data []byte, perm os.FileMode) error {
 		return fmt.Errorf("atomicfile: rename %s → %s: %w", tmpPath, path, err)
 	}
 
+	// Fsync the parent directory to ensure the rename is durable.
+	// Without this, a power loss after rename can lose the directory entry
+	// on some filesystems (ext4 without journal, XFS in certain modes).
+	if dirFd, err := os.Open(dir); err == nil {
+		dirFd.Sync()
+		dirFd.Close()
+	}
+
 	success = true
 	return nil
 }
 
-// WriteVerifiedPair writes a file and its SHA-256 checksum sidecar atomically.
-// Both files are written to temporaries, fsynced, then renamed in order
-// (data first, then checksum). The checksum sidecar uses the standard format:
-//
-//	<hex>  <basename>\n
-//
-// If the data file rename succeeds but the checksum rename fails, the data
-// file is left in place (it's valid) and the error is returned so callers
-// can detect the inconsistency.
-func WriteVerifiedPair(path string, data []byte, perm os.FileMode) error {
-	// Compute checksum.
-	hash := sha256.Sum256(data)
-	checksumHex := hex.EncodeToString(hash[:])
-	checksumContent := []byte(checksumHex + "  " + filepath.Base(path) + "\n")
-	checksumPath := path + ".sha256"
-
-	// Write data file atomically.
-	if err := WriteFile(path, data, perm); err != nil {
-		return fmt.Errorf("atomicfile: data: %w", err)
-	}
-
-	// Write checksum sidecar atomically.
-	if err := WriteFile(checksumPath, checksumContent, perm); err != nil {
-		return fmt.Errorf("atomicfile: checksum sidecar: %w", err)
-	}
-
-	return nil
-}

@@ -92,11 +92,14 @@ type PublishedArchive struct {
 }
 
 // PublishManifest records all artifacts successfully produced during a build.
+// Self-verifying: the Checksum field covers the canonical JSON representation
+// of the manifest with Checksum set to empty. Single file = single atomic write.
 type PublishManifest struct {
 	Published []PublishedImage   `json:"published"`
 	Binaries  []PublishedBinary  `json:"binaries,omitempty"`
 	Archives  []PublishedArchive `json:"archives,omitempty"`
-	Timestamp string             `json:"timestamp"` // RFC3339
+	Timestamp string             `json:"timestamp"`           // RFC3339
+	Checksum  string             `json:"checksum,omitempty"`  // SHA-256 of manifest with this field empty
 }
 
 const PublishManifestPath = ".stagefreight/publish.json"
@@ -160,23 +163,37 @@ func WritePublishManifest(dir string, manifest PublishManifest) error {
 		manifest.Timestamp = time.Now().UTC().Format(time.RFC3339)
 	}
 
-	// Marshal
+	// Compute embedded checksum: marshal without checksum, hash, then set it.
+	manifest.Checksum = ""
+	canonical, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling publish manifest: %w", err)
+	}
+	hash := sha256.Sum256(canonical)
+	manifest.Checksum = hex.EncodeToString(hash[:])
+
+	// Final marshal with checksum embedded.
 	data, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshaling publish manifest: %w", err)
 	}
 	data = append(data, '\n')
 
-	// Write manifest + checksum sidecar atomically.
+	// Single file, single atomic write. No sidecar, no pair atomicity problem.
 	manifestPath := filepath.Join(dir, PublishManifestPath)
-	if err := atomicfile.WriteVerifiedPair(manifestPath, data, 0o644); err != nil {
+	if err := atomicfile.WriteFile(manifestPath, data, 0o644); err != nil {
 		return fmt.Errorf("writing publish manifest: %w", err)
 	}
 
 	return nil
 }
 
-// ReadPublishManifest reads and validates the publish manifest and its checksum.
+// ReadPublishManifest reads and validates the publish manifest.
+// Supports two verification modes:
+//   - Embedded checksum (current): Checksum field inside the JSON covers the
+//     canonical representation with Checksum="". Single file, fully atomic.
+//   - Legacy sidecar (backward compat): Separate .sha256 file. Used only if
+//     the manifest has no embedded Checksum field.
 func ReadPublishManifest(dir string) (*PublishManifest, error) {
 	manifestPath := filepath.Join(dir, PublishManifestPath)
 
@@ -188,33 +205,44 @@ func ReadPublishManifest(dir string) (*PublishManifest, error) {
 		return nil, fmt.Errorf("%w: reading manifest: %v", ErrPublishManifestInvalid, err)
 	}
 
-	// Read and verify checksum
-	checksumPath := manifestPath + ".sha256"
-	checksumData, err := os.ReadFile(checksumPath)
-	if err != nil {
-		return nil, fmt.Errorf("%w: missing checksum file: %v", ErrPublishManifestInvalid, err)
-	}
-
-	// Parse checksum (format: "<hex>  publish.json\n")
-	checksumStr := strings.TrimSpace(string(checksumData))
-	parts := strings.SplitN(checksumStr, " ", 2)
-	if len(parts) == 0 || parts[0] == "" {
-		return nil, fmt.Errorf("%w: malformed checksum file", ErrPublishManifestInvalid)
-	}
-	expectedHex := parts[0]
-
-	// Compute actual checksum
-	actualHash := sha256.Sum256(data)
-	actualHex := hex.EncodeToString(actualHash[:])
-
-	if actualHex != expectedHex {
-		return nil, fmt.Errorf("%w: checksum mismatch (expected %s, got %s)", ErrPublishManifestInvalid, expectedHex, actualHex)
-	}
-
-	// Parse JSON
+	// Parse JSON first to check for embedded checksum.
 	var manifest PublishManifest
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		return nil, fmt.Errorf("%w: parsing manifest: %v", ErrPublishManifestInvalid, err)
+	}
+
+	if manifest.Checksum != "" {
+		// Embedded checksum: verify by re-marshaling without checksum and comparing.
+		expectedHex := manifest.Checksum
+		manifest.Checksum = ""
+		canonical, err := json.MarshalIndent(manifest, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("%w: re-marshaling for verification: %v", ErrPublishManifestInvalid, err)
+		}
+		actualHash := sha256.Sum256(canonical)
+		actualHex := hex.EncodeToString(actualHash[:])
+		if actualHex != expectedHex {
+			return nil, fmt.Errorf("%w: embedded checksum mismatch (expected %s, got %s)", ErrPublishManifestInvalid, expectedHex, actualHex)
+		}
+		manifest.Checksum = expectedHex
+		return &manifest, nil
+	}
+
+	// Legacy: verify from sidecar .sha256 file.
+	checksumPath := manifestPath + ".sha256"
+	checksumData, err := os.ReadFile(checksumPath)
+	if err != nil {
+		return nil, fmt.Errorf("%w: no embedded checksum and no sidecar file: %v", ErrPublishManifestInvalid, err)
+	}
+	checksumStr := strings.TrimSpace(string(checksumData))
+	parts := strings.SplitN(checksumStr, " ", 2)
+	if len(parts) == 0 || parts[0] == "" {
+		return nil, fmt.Errorf("%w: malformed checksum sidecar", ErrPublishManifestInvalid)
+	}
+	actualHash := sha256.Sum256(data)
+	actualHex := hex.EncodeToString(actualHash[:])
+	if actualHex != parts[0] {
+		return nil, fmt.Errorf("%w: sidecar checksum mismatch (expected %s, got %s)", ErrPublishManifestInvalid, parts[0], actualHex)
 	}
 
 	return &manifest, nil
