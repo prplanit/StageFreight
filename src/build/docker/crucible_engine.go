@@ -55,14 +55,12 @@ func CrucibleTag(purpose, runID string) string {
 func RunCrucible(ctx context.Context, opts CrucibleOpts) (*CrucibleResult, error) {
 	result := &CrucibleResult{FinalImageRef: opts.FinalTag}
 
-	args := []string{"run", "--rm", "--network", "host"}
+	// Crucible container joins the stagefreight network so it can resolve
+	// both buildkitd and dind by hostname — same backend as gestation.
+	args := []string{"run", "--rm", "--network", "stagefreight"}
 
-	// Docker socket: forward DOCKER_HOST + TLS vars, or mount the socket.
-	// When DOCKER_HOST uses a hostname (e.g. tcp://docker:2376 in GitLab CI
-	// DinD), resolve it to an IP now — the pass-2 container runs with
-	// --network host and won't be on the CI runner's Docker network where
-	// the hostname resolves.
-	dockerHost := resolveDockerHost(os.Getenv("DOCKER_HOST"))
+	// Forward Docker transport (DinD access for --load, docker run, push).
+	dockerHost := os.Getenv("DOCKER_HOST")
 	if dockerHost != "" {
 		args = append(args, "-e", "DOCKER_HOST="+dockerHost)
 		for _, tlsVar := range []string{"DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH"} {
@@ -73,17 +71,20 @@ func RunCrucible(ctx context.Context, opts CrucibleOpts) (*CrucibleResult, error
 		if certPath := os.Getenv("DOCKER_CERT_PATH"); certPath != "" {
 			args = append(args, "-v", certPath+":"+certPath+":ro")
 		}
-	} else {
-		args = append(args, "-v", "/var/run/docker.sock:/var/run/docker.sock")
 	}
 
-	// Mount repo directory
+	// Mount repo directory.
 	args = append(args, "-v", opts.RepoDir+":"+opts.RepoDir, "-w", opts.RepoDir)
 
-	// Mount buildx state so crucible can reuse sf-builder from pass 1.
-	// The runner mounts /stagefreight/buildx:/root/.docker/buildx in job containers.
-	// The crucible container needs the same mapping to see existing builders.
-	args = append(args, "-v", "/stagefreight/buildx:/root/.docker/buildx")
+	// Mount buildkit client certs — auto-discovery probes /buildkit-certs.
+	// Same certs as gestation → same buildkitd backend → shared cache.
+	bkCertPath := "/buildkit-certs"
+	if _, err := os.Stat(bkCertPath + "/ca.pem"); err == nil {
+		args = append(args, "-v", bkCertPath+":"+bkCertPath+":ro")
+	}
+
+	// Mount stagefreight persistent data.
+	args = append(args, "-v", "/stagefreight:/stagefreight")
 
 	// Recursion guard + run ID
 	args = append(args, "-e", build.CrucibleEnvVar+"=1")

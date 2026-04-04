@@ -180,7 +180,11 @@ func runCrucibleMode(req Request) error {
 	gestPlan.Row("%-16s%s", "strategy", "local")
 	gestPlan.Close()
 
-	// Gestation: Build
+	// Gestation: Build — ensure builder silently (option A).
+	// Same auto-discovery as execute phase: buildkitd preferred, DinD fallback.
+	// No narration here — pass 2's execute phase renders the authoritative Builder section.
+	EnsureBuilder(req.Config.BuildCache.Builder)
+
 	buildStart := time.Now()
 
 	bx := NewBuildx(req.Verbose)
