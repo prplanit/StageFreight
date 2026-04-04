@@ -287,19 +287,55 @@ func runCrucibleMode(req Request) error {
 	}
 
 	// ── Publish (verified artifact: pass 2) ──────────────────────
+	// Rebuild with real tags + --push. Everything is cached from pass 2,
+	// so the "build" is instant — it's really just a push from BuildKit to registries.
 	publishPassed := false
 	if cruciblePassed && (verification == nil || !verification.HasHardFailure()) {
-		// Re-plan with real tags + push targets for the verified image.
 		publishPlan := clonePlan(plan)
+
+		// Restore push semantics with real tags from config.
+		// The plan was created from engine.Plan() which has the real tags + registries.
+		// We only overrode tags/push for pass 1/2 — the original plan is the source of truth.
 		for i := range publishPlan.Steps {
 			publishPlan.Steps[i].Load = false
 			publishPlan.Steps[i].Push = true
-			// Restore original tags (from config, not crucible tags)
+			// Tags + Registries are already correct from the original plan.
 		}
 
-		// Publish not yet wired in consolidated crucible.
-		// Explicitly skip — never fake success.
-		_ = publishPlan
+		// Inject standard labels with the verified build's metadata.
+		publishLabels := build.StandardLabels(
+			build.NormalizeBuildPlan(publishPlan),
+			version.Version, version.Commit,
+			"crucible-verified", crucibleCreated,
+		)
+		build.InjectLabels(publishPlan, publishLabels)
+
+		// Login to registries — hard fail on login failure. No unauthenticated publish attempts.
+		loginBx := NewBuildx(false)
+		loginBx.Stdout = io.Discard
+		loginBx.Stderr = io.Discard
+		loginFailed := false
+		for _, step := range publishPlan.Steps {
+			if hasRemoteRegistries(step.Registries) {
+				if loginErr := loginBx.Login(ctx, step.Registries); loginErr != nil {
+					loginFailed = true
+					publishSec := output.NewSection(w, "Publish (verified artifact: pass 2)", 0, color)
+					publishSec.Row("%-14s%s", "status", "blocked — registry login failed")
+					publishSec.Row("%-14s%v", "error", loginErr)
+					publishSec.Close()
+				}
+				break
+			}
+		}
+
+		if !loginFailed {
+			_, publishErr := executeBuildPass(ctx, w, color, req.Verbose, req.Stderr,
+				"Publish (verified artifact: pass 2)", publishPlan, "")
+			if publishErr == nil {
+				publishPassed = true
+			}
+			// publishErr is structured via executeBuildPass — no extra warning needed.
+		}
 	}
 
 	// ── Cache Retention ──────────────────────────────────────────
@@ -308,11 +344,19 @@ func runCrucibleMode(req Request) error {
 	if cruciblePassed {
 		repoID := resolveRepoIDFromContext(pc)
 
-		localRetResult := enforceLocalRetention(
-			LocalCacheDir(repoID, req.Config.BuildCache.Local),
-			req.Config.BuildCache.Local.Retention,
-		)
-		renderLocalRetention(w, color, localRetResult)
+		// Local retention — backend-aware.
+		// BuildKit manages its own internal cache via GC. Local export plane is separate.
+		if backend.IsBuildkit() && req.Config.BuildCache.Local.Retention.MaxAge == "" && req.Config.BuildCache.Local.Retention.MaxSize == "" {
+			retSec := output.NewSection(w, "Cache Retention (local)", 0, color)
+			retSec.Row("%-14s%s", "status", "managed by buildkitd (internal GC)")
+			retSec.Close()
+		} else {
+			localRetResult := enforceLocalRetention(
+				LocalCacheDir(repoID, req.Config.BuildCache.Local),
+				req.Config.BuildCache.Local.Retention,
+			)
+			renderLocalRetention(w, color, localRetResult)
+		}
 
 		ext := req.Config.BuildCache.External
 		if ext.Target != "" && (ext.Retention.MaxRefs > 0 || ext.Retention.StaleAge != "") {
@@ -395,7 +439,9 @@ func runCrucibleMode(req Request) error {
 	sumSec := output.NewSection(w, "Summary", 0, color)
 
 	if !req.SkipLint {
-		output.SummaryRow(w, "lint", "success", "gate passed", color)
+		output.SummaryRow(w, "lint", "success", "lint gate passed", color)
+	} else {
+		output.SummaryRow(w, "lint", "skipped", "skip requested", color)
 	}
 	output.SummaryRow(w, "detect", "success",
 		fmt.Sprintf("%d Dockerfile(s), %s", len(det.Dockerfiles), det.Language), color)
@@ -423,9 +469,14 @@ func runCrucibleMode(req Request) error {
 	}
 
 	if publishPassed {
-		output.SummaryRow(w, "publish", "success", "verified artifact", color)
+		// Count actual tags pushed.
+		tagCount := 0
+		for _, step := range plan.Steps {
+			tagCount += len(step.Tags)
+		}
+		output.SummaryRow(w, "publish", "success", fmt.Sprintf("%d image(s) (verified artifact)", tagCount), color)
 	} else if cruciblePassed && (verification == nil || !verification.HasHardFailure()) {
-		output.SummaryRow(w, "publish", "skipped", "not yet wired in consolidated crucible", color)
+		output.SummaryRow(w, "publish", "failed", "publish failed after verification", color)
 	} else if cruciblePassed {
 		output.SummaryRow(w, "publish", "failed", "verification blocked publish", color)
 	}
@@ -458,6 +509,7 @@ func runCrucibleMode(req Request) error {
 }
 
 // executeBuildPass runs a single build pass and renders structured output.
+// resultTag: if non-empty, shows "result <tag>". If empty, shows pushed tags from plan steps.
 func executeBuildPass(ctx context.Context, w io.Writer, color, verbose bool, stderr io.Writer,
 	sectionName string, plan *build.BuildPlan, resultTag string) (*build.BuildResult, error) {
 
@@ -498,8 +550,18 @@ func executeBuildPass(ctx context.Context, w io.Writer, color, verbose bool, std
 	elapsed := time.Since(buildStart)
 	sec := output.NewSection(w, sectionName, elapsed, color)
 	renderBuildLayers(sec, result.Steps, color)
-	sec.Separator()
-	sec.Row("result  %s", resultTag)
+	if resultTag != "" {
+		sec.Separator()
+		sec.Row("result  %s", resultTag)
+	} else {
+		// Publish pass — show pushed tags from the step results.
+		sec.Separator()
+		for _, step := range plan.Steps {
+			for _, tag := range step.Tags {
+				sec.Row("%s  %s", output.StatusIcon("success", color), tag)
+			}
+		}
+	}
 	sec.Close()
 
 	return &result, nil

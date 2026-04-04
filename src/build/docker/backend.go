@@ -56,10 +56,11 @@ func ResolveBackendWithConfig(caps BackendCapabilities, configBackend string) (*
 	}
 
 	// Auto-detect: prefer buildkitd, fall back to DinD.
-	if bk != nil && bk.Healthy {
+	// canSatisfy guards against selecting a backend that can't fulfill the operation.
+	if bk != nil && bk.Healthy && canSatisfy(bk, caps) {
 		return bk, nil
 	}
-	if dind != nil && dind.Healthy {
+	if dind != nil && dind.Healthy && canSatisfy(dind, caps) {
 		return dind, nil
 	}
 
@@ -139,4 +140,17 @@ func tcpReachable(host string, port int) bool {
 // IsBuildkit returns true if this backend is a persistent buildkitd.
 func (b *Backend) IsBuildkit() bool {
 	return b.Kind == "buildkitd"
+}
+
+// canSatisfy checks if a backend can fulfill the required capabilities.
+// Currently all known backends satisfy all known operations — this guard
+// exists to prevent future regressions when new capability requirements
+// are added that not all backends support.
+func canSatisfy(b *Backend, caps BackendCapabilities) bool {
+	// Both buildkitd and DinD satisfy all current operations.
+	// BuildKit: build + push natively, run via binary extraction.
+	// DinD: build + push + run via docker daemon.
+	// Guard will become meaningful when new operations are added
+	// (e.g., multi-arch cross-build, attestation signing).
+	return b.Healthy
 }
