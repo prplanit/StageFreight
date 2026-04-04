@@ -86,7 +86,7 @@ func EnsureBuilder(cfg config.BuilderConfig) BuilderInfo {
 	if useContext {
 		createArgs = append(createArgs, ctxName)
 	}
-	if out, err := exec.Command("docker", createArgs[0], createArgs[1:]...).CombinedOutput(); err != nil {
+	if out, err := exec.Command("docker", createArgs...).CombinedOutput(); err != nil {
 		info.Status = "builder creation failed"
 		info.RawOutput = string(out)
 		info.ParseFailed = true
