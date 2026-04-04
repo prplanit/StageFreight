@@ -14,29 +14,17 @@ type GovernanceSource struct {
 
 // GovernanceConfig is the parsed clusters.yml from the policy repo.
 type GovernanceConfig struct {
-	Skeleton SkeletonSource `yaml:"skeleton"`
-	Clusters []Cluster      `yaml:"clusters"`
-}
-
-// SkeletonSource declares the CI skeleton origin.
-type SkeletonSource struct {
-	Source SkeletonRef `yaml:"source"`
-}
-
-// SkeletonRef points to the skeleton file in a repo.
-type SkeletonRef struct {
-	RepoURL string `yaml:"repo_url"`
-	Path    string `yaml:"path"`
-	Ref     string `yaml:"ref"`
+	Clusters []Cluster `yaml:"clusters"`
 }
 
 // Cluster assigns lifecycle doctrine to a group of repos.
 // The StageFreight block is normal StageFreight config — same grammar.
+// Assets (CI skeletons, settings files, etc.) are declared inside the
+// stagefreight config as assets: entries — no separate skeleton construct.
 type Cluster struct {
-	ID       string         `yaml:"id"`
-	Skeleton SkeletonSource `yaml:"skeleton"` // per-cluster override; inherits from global if empty
-	Targets  ClusterTargets `yaml:"targets"`
-	Config   map[string]any `yaml:"stagefreight"` // raw StageFreight config
+	ID      string         `yaml:"id"`
+	Targets ClusterTargets `yaml:"targets"`
+	Config  map[string]any `yaml:"stagefreight"` // raw StageFreight config
 }
 
 // ClusterTargets identifies which repos belong to this cluster.

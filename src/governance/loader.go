@@ -136,7 +136,7 @@ func parseClusters(path string) (*GovernanceConfig, error) {
 }
 
 // FetchFile fetches a single file from a git repo at a specific ref.
-// Used for loading the CI skeleton from the StageFreight repo.
+// Used as the AssetFetcher for governance distribution.
 func FetchFile(repoURL, ref, path string) ([]byte, error) {
 	if ref == "" {
 		ref = "HEAD"
