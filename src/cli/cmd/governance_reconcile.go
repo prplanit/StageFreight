@@ -3,25 +3,22 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/PrPlanIT/StageFreight/src/ci"
+	"github.com/PrPlanIT/StageFreight/src/config"
 	"github.com/PrPlanIT/StageFreight/src/forge"
 	"github.com/PrPlanIT/StageFreight/src/governance"
 )
 
 var (
-	govDryRun      bool
-	govApply       bool   // explicit flag required to enable real commits
-	govSource      string // override governance source repo URL
-	govRef         string // override governance source ref
-	govPath        string // override governance clusters file path
-	govProvider    string // forge provider for target repos (gitlab, github, gitea)
-	govForgeURL    string // forge base URL for target repos
-	govCredPrefix  string // credential env var prefix for forge API
+	govDryRun bool
+	govApply  bool   // explicit flag required to enable real commits
+	govSource string // override governance source repo URL
+	govRef    string // override governance source ref
+	govPath   string // override governance clusters file path
 )
 
 var governanceReconcileCmd = &cobra.Command{
@@ -29,6 +26,9 @@ var governanceReconcileCmd = &cobra.Command{
 	Short: "Reconcile governance policy to satellite repos",
 	Long: `Reads governance clusters from the policy repo, resolves presets,
 generates managed configs, and commits to satellite repos.
+
+Forge identity (provider, URL, credentials) is read from sources.primary
+in .stagefreight.yml — the same config every StageFreight repo uses.
 
 Use --dry-run to preview changes without committing.`,
 	RunE: runGovernanceReconcile,
@@ -40,9 +40,6 @@ func init() {
 	governanceReconcileCmd.Flags().StringVar(&govSource, "source", "", "Override governance source repo URL")
 	governanceReconcileCmd.Flags().StringVar(&govRef, "ref", "", "Override governance source ref")
 	governanceReconcileCmd.Flags().StringVar(&govPath, "path", "", "Override governance clusters file path")
-	governanceReconcileCmd.Flags().StringVar(&govProvider, "provider", "gitlab", "Forge provider for target repos (gitlab, github, gitea)")
-	governanceReconcileCmd.Flags().StringVar(&govForgeURL, "forge-url", "", "Forge base URL for target repos (e.g., https://gitlab.prplanit.com)")
-	governanceReconcileCmd.Flags().StringVar(&govCredPrefix, "cred-prefix", "GITLAB", "Credential env var prefix for forge API")
 	governanceCmd.AddCommand(governanceReconcileCmd)
 }
 
@@ -77,31 +74,29 @@ func runGovernanceReconcile(cmd *cobra.Command, args []string) error {
 
 	sourceIdentity := extractIdentity(source.RepoURL)
 
-	// Auto-resolve forge URL from CI repo URL when not set via flags.
-	if govForgeURL == "" {
-		govForgeURL = extractForgeBaseURL(source.RepoURL)
+	// Resolve forge from sources.primary — standard StageFreight config resolution.
+	// No governance-specific forge flags. Same machinery every repo uses.
+	forgeProvider, forgeBaseURL, forgeCreds, err := resolveGovernanceForge()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Forge: %v (drift detection disabled)\n", err)
 	}
 
-	// Build forge adapter for drift detection + commits.
-	// Single factory, single adapter — used for both read and write.
 	var adapter *forgeAdapter
 	var forgeReader governance.ForgeReader
-	if govForgeURL != "" {
+	if forgeBaseURL != "" {
 		factory := &forge.BasicFactory{
-			ProviderName: govProvider,
-			BaseURL:      govForgeURL,
-			CredPrefix:   govCredPrefix,
+			ProviderName: forgeProvider,
+			BaseURL:      forgeBaseURL,
+			CredPrefix:   forgeCreds,
 		}
 		adapter = &forgeAdapter{factory: factory, ctx: cmd.Context()}
 		forgeReader = adapter
-		fmt.Fprintf(os.Stderr, "Forge: %s @ %s (cred: %s_*)\n", govProvider, govForgeURL, govCredPrefix)
-	} else {
-		fmt.Fprintln(os.Stderr, "Forge: not configured (no --forge-url, drift detection disabled)")
+		fmt.Fprintf(os.Stderr, "Forge: %s @ %s (cred: %s_*)\n", forgeProvider, forgeBaseURL, forgeCreds)
 	}
 
 	presetSource := governance.PresetSourceInfo{
-		Provider:    govProvider,
-		ForgeURL:    govForgeURL,
+		Provider:    forgeProvider,
+		ForgeURL:    forgeBaseURL,
 		ProjectID:   sourceIdentity,
 		Ref:         source.Ref,
 		CachePolicy: "authoritative",
@@ -143,7 +138,7 @@ func runGovernanceReconcile(cmd *cobra.Command, args []string) error {
 	}
 
 	if adapter == nil {
-		return fmt.Errorf("--forge-url required for --apply mode")
+		return fmt.Errorf("sources.primary required for --apply mode (forge identity not resolved)")
 	}
 
 	fmt.Fprintln(os.Stderr, "\nCommitting to satellite repos...")
@@ -209,13 +204,18 @@ func resolveGovernanceSource() (governance.GovernanceSource, error) {
 		}
 	}
 
+	// Fall back to sources.primary.url from config.
+	if source.RepoURL == "" && cfg != nil && cfg.Sources.Primary.URL != "" {
+		source.RepoURL = cfg.Sources.Primary.URL
+	}
+
 	// Default path: governance is embedded in .stagefreight.yml.
 	if source.Path == "" {
 		source.Path = ".stagefreight.yml"
 	}
 
 	if source.RepoURL == "" {
-		return source, fmt.Errorf("governance source required: use --source or configure governance.source in .stagefreight.yml")
+		return source, fmt.Errorf("governance source required: set sources.primary.url in .stagefreight.yml")
 	}
 	if source.Ref == "" {
 		return source, fmt.Errorf("governance ref required: use --ref (pinned tag or commit SHA)")
@@ -224,27 +224,24 @@ func resolveGovernanceSource() (governance.GovernanceSource, error) {
 	return source, nil
 }
 
-// extractForgeBaseURL extracts "https://host" from a full repo URL.
-// Returns empty string if the URL can't be parsed.
-func extractForgeBaseURL(repoURL string) string {
-	if repoURL == "" {
-		return ""
+// resolveGovernanceForge reads forge identity from the standard sources.primary config.
+// Returns provider, base URL, and credential prefix.
+// This is the same config resolution every StageFreight repo uses — no governance-specific mechanism.
+func resolveGovernanceForge() (provider, baseURL, credPrefix string, err error) {
+	if cfg == nil || cfg.Sources.Primary.URL == "" {
+		return "", "", "", fmt.Errorf("sources.primary.url not configured")
 	}
-	// Handle https:// and http:// URLs.
-	if strings.HasPrefix(repoURL, "https://") || strings.HasPrefix(repoURL, "http://") {
-		u, err := url.Parse(repoURL)
-		if err != nil {
-			return ""
-		}
-		return u.Scheme + "://" + u.Host
+
+	provider, baseURL, _, err = config.ParseForgeURL(cfg.Sources.Primary.URL)
+	if err != nil {
+		return "", "", "", fmt.Errorf("parsing sources.primary.url: %w", err)
 	}
-	// Handle git@host:path or ssh://git@host:port/path.
-	s := strings.TrimPrefix(repoURL, "ssh://")
-	s = strings.TrimPrefix(s, "git@")
-	if idx := strings.IndexAny(s, ":/"); idx >= 0 {
-		return "https://" + s[:idx]
-	}
-	return ""
+
+	// Credential prefix: use the first mirror's credentials if declared,
+	// otherwise derive from provider name (GITLAB, GITHUB, GITEA).
+	credPrefix = strings.ToUpper(provider)
+
+	return provider, baseURL, credPrefix, nil
 }
 
 // extractIdentity extracts "org/repo" from a full URL.
@@ -263,7 +260,6 @@ func extractIdentity(repoURL string) string {
 	return s
 }
 
-// forgeReaderAdapter wraps a forge.Factory to satisfy governance.ForgeReader.
 // forgeAdapter wraps forge.Factory to satisfy both governance.ForgeReader and governance.ForgeClient.
 // Governance selects repos; the factory materializes per-repo forge clients.
 type forgeAdapter struct {
@@ -315,4 +311,3 @@ func (a *forgeAdapter) CommitFiles(repo, branch, message string, files []governa
 	}
 	return result.SHA, nil
 }
-
