@@ -585,6 +585,7 @@ commit:
 | Name | YAML Key | Type | Required | Default | Description |
 |------|----------|------|----------|---------|-------------|
 | `mode` | `mode` | string | No | — | string value |
+| `path` | `local.path` | string | No | — | string value |
 | `max_age` | `local.retention.max_age` | string | No | — | string value |
 | `max_size` | `local.retention.max_size` | string | No | — | string value |
 | `target` | `external.target` | string | No | — | string value |
