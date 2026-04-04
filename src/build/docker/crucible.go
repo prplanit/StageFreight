@@ -207,6 +207,26 @@ func runCrucibleMode(req Request) error {
 	cacheInfo := ResolveCacheInfo(pc)
 	RenderCacheInfo(w, color, cacheInfo)
 
+	// Compute cache-to flags for the publish pass.
+	// image_engine only sets CacheTo on push steps, but crucible plans are load-only.
+	// We compute cacheTo here and inject it on the publish pass when Push is restored.
+	var publishCacheTo []build.CacheRef
+	if req.Config.BuildCache.IsActive() {
+		versionInfo, _ := build.DetectVersion(rootDir)
+		cacheRepoID := resolveRepoIDFromContext(pc)
+		cacheBranch := ""
+		if versionInfo != nil {
+			cacheBranch = versionInfo.Branch
+		}
+		if b := os.Getenv("CI_COMMIT_BRANCH"); b != "" && cacheBranch == "" {
+			cacheBranch = b
+		}
+		if cacheBranch == "" {
+			cacheBranch = "default"
+		}
+		_, publishCacheTo = BuildCacheFlags(req.Config.BuildCache, cacheRepoID, cacheBranch, req.Config.Targets)
+	}
+
 	// ── Build (pass 1: candidate) ────────────────────────────────
 	pass1Plan := clonePlan(plan)
 	for i := range pass1Plan.Steps {
@@ -301,6 +321,8 @@ func runCrucibleMode(req Request) error {
 		for i := range publishPlan.Steps {
 			publishPlan.Steps[i].Load = false
 			publishPlan.Steps[i].Push = true
+			// Restore cache-to — original plan had Push=false so CacheTo was never set.
+			publishPlan.Steps[i].CacheTo = publishCacheTo
 			// Set up metadata file for structured publish result extraction.
 			metaFile, tmpErr := os.CreateTemp("", "crucible-publish-metadata-*.json")
 			if tmpErr == nil {
