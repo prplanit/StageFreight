@@ -552,6 +552,7 @@ func docsRunner(ctx context.Context, appCfg *config.Config, ciCtx *ci.CIContext,
 
 	// Resolve BUILD_STATUS from pipeline state — not hardcoded in skeleton.
 	// Reads accumulated subsystem state; docs is always the last consumer.
+	// The badge is the narration — no separate console rendering needed.
 	if os.Getenv("BUILD_STATUS") == "" || os.Getenv("BUILD_STATUS") == "passing" {
 		if st, err := cistate.ReadState(rootDir); err == nil {
 			os.Setenv("BUILD_STATUS", st.PipelineStatus())
