@@ -5,12 +5,23 @@
 # for Docker-dependent operations (security scans, docker push).
 #
 # Trust split:
-#   runner     → host Docker socket (container management only)
-#   build jobs → BUILDKIT_HOST=tcp://buildkitd:1234 (no Docker access)
-#   docker jobs → DOCKER_HOST=tcp://dind:2376 (no host Docker access)
-#   other jobs → no daemon access
+#   runner       → host Docker socket (container management only)
+#   build jobs   → BUILDKIT_HOST=tcp://buildkitd:1234 (mTLS, independent PKI)
+#   docker jobs  → DOCKER_HOST=tcp://dind:2376 (DinD TLS)
+#   other jobs   → no daemon access
 #
 # Use this when: build speed matters, persistent runner, trusted repos.
+#
+# Required env vars in .env or shell:
+#   CI_SERVER_URL  — GitLab instance URL
+#   RUNNER_TOKEN   — runner authentication token
+#
+# Optional env vars:
+#   SF_CERTS_PATH    — DinD cert storage (default: ./certs)
+#   SF_RUNTIME_PATH  — StageFreight persistent data (default: ./stagefreight)
+#   SF_CONFIG_PATH   — Runner config dir (default: ./config)
+#   SF_BUILDKIT_CERTS_PATH — BuildKit PKI storage (default: ./buildkitd-certs)
+#   RUNNER_NAME      — Runner display name (default: StageFreight Runner)
 
 services:
   dind:
@@ -35,24 +46,73 @@ services:
         aliases:
           - dind
 
+  buildkitd-certs:
+    image: docker.io/library/alpine:3
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ -f /out/server/cert.pem ]; then
+          echo "BuildKit PKI already exists, skipping"
+          exit 0
+        fi
+        apk add --no-cache openssl >/dev/null 2>&1
+        echo "Generating independent BuildKit PKI..."
+        mkdir -p /out/ca /out/server /out/client
+
+        # CA
+        openssl genrsa -out /out/ca/key.pem 4096 2>/dev/null
+        openssl req -new -x509 -key /out/ca/key.pem -out /out/ca/cert.pem \
+          -days 3650 -subj "/CN=BuildKit CA" 2>/dev/null
+
+        # Server cert (SAN: DNS:buildkitd + IP:127.0.0.1 for healthcheck)
+        openssl genrsa -out /out/server/key.pem 4096 2>/dev/null
+        openssl req -new -key /out/server/key.pem -out /tmp/server.csr \
+          -subj "/CN=buildkitd" 2>/dev/null
+        printf "[v3]\nsubjectAltName=DNS:buildkitd,DNS:localhost,IP:127.0.0.1" > /tmp/ext.cnf
+        openssl x509 -req -in /tmp/server.csr \
+          -CA /out/ca/cert.pem -CAkey /out/ca/key.pem -CAcreateserial \
+          -out /out/server/cert.pem -days 3650 \
+          -extensions v3 -extfile /tmp/ext.cnf 2>/dev/null
+
+        # Client cert
+        openssl genrsa -out /out/client/key.pem 4096 2>/dev/null
+        openssl req -new -key /out/client/key.pem -out /tmp/client.csr \
+          -subj "/CN=buildkit-client" 2>/dev/null
+        openssl x509 -req -in /tmp/client.csr \
+          -CA /out/ca/cert.pem -CAkey /out/ca/key.pem -CAcreateserial \
+          -out /out/client/cert.pem -days 3650 2>/dev/null
+        cp /out/ca/cert.pem /out/client/ca.pem
+
+        echo "BuildKit PKI generated (independent from DinD)"
+    volumes:
+      - ${SF_BUILDKIT_CERTS_PATH:-./buildkitd-certs}:/out
+
   buildkitd:
     image: moby/buildkit:latest
     privileged: true
     restart: always
+    depends_on:
+      buildkitd-certs:
+        condition: service_completed_successfully
     command:
       - --addr
       - tcp://0.0.0.0:1234
+      - --tlscacert=/certs/ca/cert.pem
+      - --tlscert=/certs/server/cert.pem
+      - --tlskey=/certs/server/key.pem
       - --oci-worker-gc=true
       - --oci-worker-gc-keepstorage=35000
     volumes:
       - buildkitd-state:/var/lib/buildkit
       - ${SF_RUNTIME_PATH:-./stagefreight}:/stagefreight
+      - ${SF_BUILDKIT_CERTS_PATH:-./buildkitd-certs}:/certs:ro
     healthcheck:
-      test: ["CMD", "buildctl", "--addr", "tcp://127.0.0.1:1234", "debug", "workers"]
+      test: ["CMD-SHELL", "buildctl --addr tcp://127.0.0.1:1234 --tlscacert /certs/ca/cert.pem --tlscert /certs/client/cert.pem --tlskey /certs/client/key.pem debug workers"]
       interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 5s
+      retries: 5
+      start_period: 15s
     networks:
       stagefreight:
         aliases:
@@ -70,16 +130,20 @@ services:
     command:
       - |
         if [ ! -f /etc/gitlab-runner/config.toml ]; then
+          echo "Config does not exist, registering runner..."
           gitlab-runner register \
             --docker-image=alpine:latest \
             --docker-network-mode=stagefreight \
             --docker-privileged=false \
             --docker-volumes=${SF_RUNTIME_PATH:-/opt/stagefreight}:/stagefreight \
+            --docker-volumes=${SF_BUILDKIT_CERTS_PATH:-/opt/buildkitd-certs}/client:/buildkit-certs:ro \
             --executor=docker \
             --name=$${RUNNER_NAME:-"StageFreight Runner"} \
             --non-interactive \
             --token=$${RUNNER_TOKEN} \
             --url=$${CI_SERVER_URL}
+        else
+          echo "Runner config already exists, skipping registration"
         fi
     environment:
       - CI_SERVER_URL=${CI_SERVER_URL}
@@ -101,6 +165,12 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${SF_CONFIG_PATH:-./config}:/etc/gitlab-runner:z
+    healthcheck:
+      test: ["CMD", "gitlab-runner", "list"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - stagefreight
 

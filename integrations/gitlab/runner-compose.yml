@@ -68,6 +68,12 @@ services:
     volumes:
       - ${SF_CERTS_PATH:-./certs}:/certs:ro
       - ${SF_CONFIG_PATH:-./config}:/etc/gitlab-runner:z
+    healthcheck:
+      test: ["CMD", "gitlab-runner", "list"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   dind-storage:
