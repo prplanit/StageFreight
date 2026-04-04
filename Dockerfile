@@ -4,20 +4,35 @@ FROM docker.io/library/golang:1.26.1-alpine3.23 AS builder
 RUN apk add --no-cache git chafa
 
 WORKDIR /src
+
+# Module download — cached independently of source changes.
+# Only re-runs when go.mod/go.sum change.
 COPY go.mod go.sum* ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
+
+# Source copy — invalidates build layers but NOT module cache.
 COPY src/ ./src/
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/
-RUN go mod tidy
+
+# Tidy with mount cache — uses cached modules, only adds missing ones.
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod tidy
 
 # Generate banner art from logo.png (produces banner_art_gen.go with escaped ANSI).
-RUN go generate ./src/output/...
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    go generate ./src/output/...
 
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_DATE=unknown
 
-RUN CGO_ENABLED=0 go build -tags banner_art \
+# Build with persistent Go build cache — only recompiles changed packages.
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    CGO_ENABLED=0 go build -tags banner_art \
       -ldflags "-s -w \
         -X github.com/PrPlanIT/StageFreight/src/version.Version=${VERSION} \
         -X github.com/PrPlanIT/StageFreight/src/version.Commit=${COMMIT} \
