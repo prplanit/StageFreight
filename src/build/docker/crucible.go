@@ -290,6 +290,7 @@ func runCrucibleMode(req Request) error {
 	// Rebuild with real tags + --push. Everything is cached from pass 2,
 	// so the "build" is instant — it's really just a push from BuildKit to registries.
 	publishPassed := false
+	var publishResult *build.BuildResult
 	if cruciblePassed && (verification == nil || !verification.HasHardFailure()) {
 		publishPlan := clonePlan(plan)
 
@@ -329,12 +330,12 @@ func runCrucibleMode(req Request) error {
 		}
 
 		if !loginFailed {
-			_, publishErr := executeBuildPass(ctx, w, color, req.Verbose, req.Stderr,
+			pubResult, publishErr := executeBuildPass(ctx, w, color, req.Verbose, req.Stderr,
 				"Publish (verified artifact: pass 2)", publishPlan, "")
 			if publishErr == nil {
 				publishPassed = true
+				publishResult = pubResult
 			}
-			// publishErr is structured via executeBuildPass — no extra warning needed.
 		}
 	}
 
@@ -468,13 +469,13 @@ func runCrucibleMode(req Request) error {
 		output.SummaryRow(w, "verification", verStatus, build.TrustLevelLabel(verification.TrustLevel), color)
 	}
 
-	if publishPassed {
-		// Count actual tags pushed.
-		tagCount := 0
-		for _, step := range plan.Steps {
-			tagCount += len(step.Tags)
+	if publishPassed && publishResult != nil {
+		// Count actually pushed images from build result, not plan.
+		pushed := 0
+		for _, step := range publishResult.Steps {
+			pushed += len(step.Images)
 		}
-		output.SummaryRow(w, "publish", "success", fmt.Sprintf("%d image(s) (verified artifact)", tagCount), color)
+		output.SummaryRow(w, "publish", "success", fmt.Sprintf("%d image(s) (verified artifact)", pushed), color)
 	} else if cruciblePassed && (verification == nil || !verification.HasHardFailure()) {
 		output.SummaryRow(w, "publish", "failed", "publish failed after verification", color)
 	} else if cruciblePassed {
