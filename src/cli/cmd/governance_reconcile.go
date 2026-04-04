@@ -90,7 +90,11 @@ func runGovernanceReconcile(cmd *cobra.Command, args []string) error {
 			BaseURL:      forgeBaseURL,
 			CredPrefix:   forgeCreds,
 		}
-		adapter = &forgeAdapter{factory: factory, ctx: cmd.Context()}
+		adapterCtx := cmd.Context()
+		if adapterCtx == nil {
+			adapterCtx = context.Background()
+		}
+		adapter = &forgeAdapter{factory: factory, ctx: adapterCtx}
 		forgeReader = adapter
 		fmt.Fprintf(os.Stderr, "Forge: %s @ %s (cred: %s_*)\n", forgeProvider, forgeBaseURL, forgeCreds)
 	}
