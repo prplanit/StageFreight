@@ -18,43 +18,69 @@ import (
 	"github.com/PrPlanIT/StageFreight/src/diag"
 )
 
-// buildPublishedImages creates structured publish records from a build step.
-// step.Tags are full image refs (e.g., "docker.io/prplanit/stagefreight:dev-abc123").
-// We parse each tag into structured fields. Registries provide Provider metadata.
-func buildPublishedImages(step build.BuildStep) []artifact.PublishedImage {
-	if !step.Push {
-		return nil
+// ParseBuildxPublished extracts structured publish records from a buildx metadata file.
+// This is the authoritative source: buildx writes the actual pushed refs + digest
+// to the metadata file after a successful push. Works for both docker-container
+// and remote (buildkitd) drivers.
+//
+// Metadata JSON format:
+//
+//	{"containerimage.digest": "sha256:...", "image.name": "host/path:tag,host2/path:tag,..."}
+func ParseBuildxPublished(metadataFile string, registries []build.RegistryConfig) ([]artifact.PublishedImage, error) {
+	data, err := os.ReadFile(metadataFile)
+	if err != nil {
+		return nil, err
 	}
 
-	// Build a provider lookup from registries.
+	var meta struct {
+		Digest    string `json:"containerimage.digest"`
+		ImageName string `json:"image.name"`
+	}
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, err
+	}
+
+	if meta.ImageName == "" {
+		return nil, fmt.Errorf("no image.name in metadata file")
+	}
+
+	// Build provider lookup from registry configs.
 	providerByHost := make(map[string]string)
-	for _, reg := range step.Registries {
+	for _, reg := range registries {
 		providerByHost[strings.ToLower(reg.URL)] = reg.Provider
 	}
 
 	var images []artifact.PublishedImage
-	for _, fullRef := range step.Tags {
-		img := artifact.PublishedImage{Ref: fullRef}
-
-		// Parse host/path:tag from the full ref.
-		ref := fullRef
-		if idx := strings.LastIndex(ref, ":"); idx > 0 && !strings.Contains(ref[idx:], "/") {
-			img.Tag = ref[idx+1:]
-			ref = ref[:idx]
+	for _, ref := range strings.Split(meta.ImageName, ",") {
+		ref = strings.TrimSpace(ref)
+		if ref == "" {
+			continue
 		}
-		parts := strings.SplitN(ref, "/", 2)
+
+		img := artifact.PublishedImage{
+			Ref:    ref,
+			Digest: meta.Digest,
+		}
+
+		// Parse host/path:tag from the ref.
+		r := ref
+		if idx := strings.LastIndex(r, ":"); idx > 0 && !strings.Contains(r[idx:], "/") {
+			img.Tag = r[idx+1:]
+			r = r[:idx]
+		}
+		parts := strings.SplitN(r, "/", 2)
 		if len(parts) == 2 && (strings.Contains(parts[0], ".") || strings.Contains(parts[0], ":")) {
 			img.Host = strings.ToLower(parts[0])
 			img.Path = parts[1]
 		} else {
 			img.Host = "docker.io"
-			img.Path = ref
+			img.Path = r
 		}
 
 		img.Provider = providerByHost[img.Host]
 		images = append(images, img)
 	}
-	return images
+	return images, nil
 }
 
 // Buildx wraps docker buildx commands.
@@ -102,7 +128,13 @@ func (bx *Buildx) Build(ctx context.Context, step build.BuildStep) (*build.StepR
 	result.Status = "success"
 	result.Duration = time.Since(start)
 	result.Images = step.Tags
-	result.PublishedImages = buildPublishedImages(step)
+
+	// Extract structured publish records from metadata file (authoritative).
+	if step.MetadataFile != "" {
+		if imgs, err := ParseBuildxPublished(step.MetadataFile, step.Registries); err == nil {
+			result.PublishedImages = imgs
+		}
+	}
 
 	return result, nil
 }
@@ -147,7 +179,13 @@ func (bx *Buildx) BuildWithLayers(ctx context.Context, step build.BuildStep) (*b
 	result.Status = "success"
 	result.Duration = time.Since(start)
 	result.Images = step.Tags
-	result.PublishedImages = buildPublishedImages(step)
+
+	// Extract structured publish records from metadata file (authoritative).
+	if step.MetadataFile != "" {
+		if imgs, err := ParseBuildxPublished(step.MetadataFile, step.Registries); err == nil {
+			result.PublishedImages = imgs
+		}
+	}
 
 	// Parse layer events from captured stderr.
 	layers := ParseBuildxOutput(stderrBuf.String())

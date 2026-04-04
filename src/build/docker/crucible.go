@@ -301,7 +301,13 @@ func runCrucibleMode(req Request) error {
 		for i := range publishPlan.Steps {
 			publishPlan.Steps[i].Load = false
 			publishPlan.Steps[i].Push = true
-			// Tags + Registries are already correct from the original plan.
+			// Set up metadata file for structured publish result extraction.
+			metaFile, tmpErr := os.CreateTemp("", "crucible-publish-metadata-*.json")
+			if tmpErr == nil {
+				publishPlan.Steps[i].MetadataFile = metaFile.Name()
+				metaFile.Close()
+				defer os.Remove(metaFile.Name())
+			}
 		}
 
 		// Inject standard labels with the verified build's metadata.
@@ -485,10 +491,14 @@ func runCrucibleMode(req Request) error {
 	}
 
 	if publishPassed && publishResult != nil {
-		// Count actually pushed images from build result, not plan.
+		// Count actually pushed images from structured records.
 		pushed := 0
 		for _, step := range publishResult.Steps {
-			pushed += len(step.Images)
+			if len(step.PublishedImages) > 0 {
+				pushed += len(step.PublishedImages)
+			} else {
+				pushed += len(step.Images) // fallback to raw refs
+			}
 		}
 		output.SummaryRow(w, "publish", "success", fmt.Sprintf("%d image(s) (verified artifact)", pushed), color)
 	} else if cruciblePassed && (verification == nil || !verification.HasHardFailure()) {
