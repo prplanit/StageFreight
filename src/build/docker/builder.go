@@ -80,9 +80,36 @@ func ensureRemoteBuilder(name, endpoint string, info BuilderInfo) BuilderInfo {
 		exec.Command("docker", "buildx", "use", name).CombinedOutput()
 	} else {
 		// Create remote builder pointing at buildkitd.
+		// BuildKit has its own PKI — independent from DinD trust domain.
+		// Client certs at BUILDKIT_CERT_PATH (default: /buildkit-certs).
 		exec.Command("docker", "buildx", "rm", name).CombinedOutput()
-		if out, err := exec.Command("docker", "buildx", "create",
-			"--name", name, "--driver", "remote", "--use", endpoint).CombinedOutput(); err != nil {
+		createArgs := []string{"buildx", "create", "--name", name, "--driver", "remote", "--use"}
+
+		bkCertPath := os.Getenv("BUILDKIT_CERT_PATH")
+		if bkCertPath == "" {
+			bkCertPath = "/buildkit-certs"
+		}
+		caPath := fmt.Sprintf("%s/ca.pem", bkCertPath)
+		certFile := fmt.Sprintf("%s/cert.pem", bkCertPath)
+		keyFile := fmt.Sprintf("%s/key.pem", bkCertPath)
+
+		// TLS is mandatory when BUILDKIT_HOST is set. No silent fallback to insecure.
+		for _, f := range []string{caPath, certFile, keyFile} {
+			if _, err := os.Stat(f); err != nil {
+				info.Status = "buildkit TLS misconfigured"
+				info.RawOutput = fmt.Sprintf("missing %s — BUILDKIT_HOST requires TLS certs at %s", f, bkCertPath)
+				info.ParseFailed = true
+				return info
+			}
+		}
+		createArgs = append(createArgs,
+			"--driver-opt", "cacert="+caPath,
+			"--driver-opt", "cert="+certFile,
+			"--driver-opt", "key="+keyFile,
+		)
+		createArgs = append(createArgs, endpoint)
+
+		if out, err := exec.Command("docker", createArgs...).CombinedOutput(); err != nil {
 			info.Status = "remote builder creation failed"
 			info.RawOutput = string(out)
 			info.ParseFailed = true

@@ -30,9 +30,9 @@ workflow:
   - export SF_CI_WORKSPACE="$PWD"
   - export SF_CI_PIPELINE_ID="${CI_PIPELINE_ID}"
 
-# Runner sets BUILDKIT_HOST and/or DOCKER_HOST via compose + network.
-# These are NOT set here — they come from the runner environment.
-# See integrations/gitlab/runner-compose*.yml for examples.
+# Runner sets BUILDKIT_HOST and/or DOCKER_HOST via runner environment variables
+# or CI/CD group/project variables. See integrations/gitlab/runner-compose*.yml.
+# DOCKER_CERT_PATH is used for TLS auth to both DinD and buildkitd (same CA).
 
 default:
   image: docker.cr.pcfae.com/prplanit/stagefreight:latest-dev
