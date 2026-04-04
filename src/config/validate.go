@@ -497,32 +497,43 @@ func validateTarget(t TargetConfig, path string, buildIDs map[string]bool, polic
 		}
 
 	case "release":
-		// Primary vs remote mode validation
-		remoteFields := 0
-		if t.Provider != "" {
-			remoteFields++
-		}
-		if t.URL != "" {
-			remoteFields++
-		}
-		if t.ProjectID != "" {
-			remoteFields++
-		}
-		if t.Credentials != "" {
-			remoteFields++
-		}
-
-		if remoteFields > 0 && remoteFields < 4 {
-			errs = append(errs, fmt.Sprintf("%s: remote release requires all of provider, url, project_id, credentials (got %d of 4)", path, remoteFields))
-		}
-
-		isPrimary := remoteFields == 0
-		if isPrimary {
-			if t.SyncRelease {
-				errs = append(errs, fmt.Sprintf("%s: sync_release is only valid for remote release targets", path))
+		// Mirror-referenced release: forge identity comes from sources.mirrors.
+		if t.Mirror != "" {
+			if FindMirrorByID(cfg.Sources.Mirrors, t.Mirror) == nil {
+				errs = append(errs, fmt.Sprintf("%s: mirror %q not found in sources.mirrors", path, t.Mirror))
 			}
-			if t.SyncAssets {
-				errs = append(errs, fmt.Sprintf("%s: sync_assets is only valid for remote release targets", path))
+			// Mirror-referenced targets must not restate forge fields.
+			if t.Provider != "" || t.URL != "" || t.ProjectID != "" || t.Credentials != "" {
+				errs = append(errs, fmt.Sprintf("%s: mirror-referenced release must not set provider/url/project_id/credentials (resolved from mirror)", path))
+			}
+		} else {
+			// Primary vs remote mode validation (explicit forge fields).
+			remoteFields := 0
+			if t.Provider != "" {
+				remoteFields++
+			}
+			if t.URL != "" {
+				remoteFields++
+			}
+			if t.ProjectID != "" {
+				remoteFields++
+			}
+			if t.Credentials != "" {
+				remoteFields++
+			}
+
+			if remoteFields > 0 && remoteFields < 4 {
+				errs = append(errs, fmt.Sprintf("%s: remote release requires all of provider, url, project_id, credentials (got %d of 4)", path, remoteFields))
+			}
+
+			isPrimary := remoteFields == 0
+			if isPrimary {
+				if t.SyncRelease {
+					errs = append(errs, fmt.Sprintf("%s: sync_release is only valid for remote release targets", path))
+				}
+				if t.SyncAssets {
+					errs = append(errs, fmt.Sprintf("%s: sync_assets is only valid for remote release targets", path))
+				}
 			}
 		}
 

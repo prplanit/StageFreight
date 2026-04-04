@@ -92,6 +92,11 @@ type TargetConfig struct {
 	// ProjectID is the "owner/repo" or numeric ID for remote forge targets (kind: release).
 	ProjectID string `yaml:"project_id,omitempty"`
 
+	// Mirror references a sources.mirrors[].id for release sync.
+	// Forge identity (provider, url, project_id, credentials) is resolved from the mirror.
+	// Avoids restating forge connection details in the target.
+	Mirror string `yaml:"mirror,omitempty"`
+
 	// SyncRelease syncs release notes + tags to a remote forge (kind: release, remote only).
 	SyncRelease bool `yaml:"sync_release,omitempty"`
 
@@ -123,8 +128,12 @@ type TargetConfig struct {
 	Checksums bool `yaml:"checksums,omitempty"`
 }
 
-// IsRemoteRelease returns true if this release target has all remote forge fields set.
+// IsRemoteRelease returns true if this release target references a remote forge,
+// either via explicit forge fields or via a mirror reference.
 func (t TargetConfig) IsRemoteRelease() bool {
+	if t.Mirror != "" {
+		return true
+	}
 	return t.Provider != "" && t.URL != "" && t.ProjectID != "" && t.Credentials != ""
 }
 

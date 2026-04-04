@@ -557,64 +557,58 @@ func RunReleaseCreate(req ReleaseCreateRequest) error {
 	sec.Close()
 	output.SectionEnd(w, "sf_release")
 
-	// ── Sync section (remote release targets) ──
-	if !req.SkipSync && len(remoteReleases) > 0 {
+	// ── Release projection ──
+	// Sources declare destinations. Targets declare production + optional overrides.
+	// Precedence per mirror:
+	//   1. Explicit release target with mirror: <id> → use target behavior
+	//   2. Mirror with sync.releases: true → default projection from canonical release
+	//   3. Neither → skip
+	if !req.SkipSync {
 		currentTag := os.Getenv("CI_COMMIT_TAG")
-
 		var syncResults []actionResult
 		syncStart := time.Now()
 
+		// Collect mirrors that have explicit target overrides.
+		overriddenMirrors := make(map[string]bool)
 		for _, t := range remoteReleases {
-			// Check when conditions
+			if t.Mirror != "" {
+				overriddenMirrors[t.Mirror] = true
+			}
+		}
+
+		// Path 1: Explicit target overrides.
+		for _, t := range remoteReleases {
 			if !targetWhenMatches(t, currentTag, req.Config.Policies) {
 				if req.Verbose {
 					fmt.Fprintf(os.Stderr, "skip sync: %s (when conditions not met)\n", t.ID)
 				}
 				continue
 			}
+			syncResults = append(syncResults, projectRelease(ctx, t, req, tag, name, notes, allAssets)...)
+		}
 
-			syncClient, err := newSyncForgeClientFromTarget(t, req.Config.Vars)
-			if err != nil {
-				syncResults = append(syncResults, actionResult{Name: t.ID, Err: err})
-				fmt.Fprintf(os.Stderr, "warning: sync to %s: %v\n", t.ID, err)
+		// Path 2: Mirror-driven default projection.
+		// Mirrors with sync.releases that don't have an explicit override.
+		for _, m := range req.Config.Sources.Mirrors {
+			if !m.Sync.Releases || overriddenMirrors[m.ID] {
 				continue
 			}
-
-			if t.SyncRelease {
-				syncRel, err := syncClient.CreateRelease(ctx, forge.ReleaseOptions{
-					TagName:     tag,
-					Name:        name,
-					Description: notes,
-					Draft:       req.Draft,
-					Prerelease:  req.Prerelease,
-				})
-				if err != nil {
-					syncResults = append(syncResults, actionResult{Name: t.ID, Err: err})
-					fmt.Fprintf(os.Stderr, "warning: sync release to %s: %v\n", t.ID, err)
-					continue
-				}
-
-				syncResults = append(syncResults, actionResult{Name: fmt.Sprintf("%s: %s", t.ID, syncRel.URL), OK: true})
-
-				// Sync assets to this target
-				if t.SyncAssets {
-					for _, assetPath := range allAssets {
-						assetName := filepath.Base(assetPath)
-						if err := syncClient.UploadAsset(ctx, syncRel.ID, forge.Asset{
-							Name:     assetName,
-							FilePath: assetPath,
-						}); err != nil {
-							fmt.Fprintf(os.Stderr, "warning: sync asset %s to %s: %v\n", assetName, t.ID, err)
-						}
-					}
-				}
+			mirrorTarget := config.TargetConfig{
+				ID:          "mirror:" + m.ID,
+				Kind:        "release",
+				Provider:    m.Provider,
+				URL:         m.URL,
+				ProjectID:   m.ProjectID,
+				Credentials: m.Credentials,
+				SyncRelease: true,
 			}
+			syncResults = append(syncResults, projectRelease(ctx, mirrorTarget, req, tag, name, notes, allAssets)...)
 		}
 
 		if len(syncResults) > 0 {
 			syncElapsed := time.Since(syncStart)
-			output.SectionStart(w, "sf_sync", "Sync")
-			syncSec := output.NewSection(w, "Sync", syncElapsed, color)
+			output.SectionStart(w, "sf_sync", "Release Projection")
+			syncSec := output.NewSection(w, "Release Projection", syncElapsed, color)
 			for _, r := range syncResults {
 				if r.OK {
 					syncSec.Row("%s %s", output.StatusIcon("success", color), r.Name)
@@ -983,7 +977,62 @@ func newForgeClient(provider forge.Provider, remoteURL string) (forge.Forge, err
 }
 
 // newSyncForgeClientFromTarget creates a forge client for a remote release target.
-func newSyncForgeClientFromTarget(t config.TargetConfig, vars map[string]string) (forge.Forge, error) {
+// projectRelease projects a canonical release to a single destination.
+// Used by both explicit target overrides and mirror-driven default projection.
+func projectRelease(ctx context.Context, t config.TargetConfig, req ReleaseCreateRequest, tag, name, notes string, allAssets []string) []actionResult {
+	var results []actionResult
+
+	syncClient, err := newSyncForgeClientFromTarget(t, req.Config.Vars, req.Config.Sources.Mirrors)
+	if err != nil {
+		results = append(results, actionResult{Name: t.ID, Err: err})
+		fmt.Fprintf(os.Stderr, "warning: projection to %s: %v\n", t.ID, err)
+		return results
+	}
+
+	if t.SyncRelease {
+		syncRel, err := syncClient.CreateRelease(ctx, forge.ReleaseOptions{
+			TagName:     tag,
+			Name:        name,
+			Description: notes,
+			Draft:       req.Draft,
+			Prerelease:  req.Prerelease,
+		})
+		if err != nil {
+			results = append(results, actionResult{Name: t.ID, Err: err})
+			fmt.Fprintf(os.Stderr, "warning: release projection to %s: %v\n", t.ID, err)
+			return results
+		}
+		results = append(results, actionResult{Name: fmt.Sprintf("%s: %s", t.ID, syncRel.URL), OK: true})
+
+		if t.SyncAssets {
+			for _, assetPath := range allAssets {
+				assetName := filepath.Base(assetPath)
+				if err := syncClient.UploadAsset(ctx, syncRel.ID, forge.Asset{
+					Name:     assetName,
+					FilePath: assetPath,
+				}); err != nil {
+					fmt.Fprintf(os.Stderr, "warning: asset projection %s to %s: %v\n", assetName, t.ID, err)
+				}
+			}
+		}
+	}
+
+	return results
+}
+
+func newSyncForgeClientFromTarget(t config.TargetConfig, vars map[string]string, mirrors []config.MirrorConfig) (forge.Forge, error) {
+	// Resolve mirror reference — forge identity comes from the mirror.
+	if t.Mirror != "" {
+		m := config.FindMirrorByID(mirrors, t.Mirror)
+		if m == nil {
+			return nil, fmt.Errorf("release target %s: mirror %q not found", t.ID, t.Mirror)
+		}
+		t.Provider = m.Provider
+		t.URL = m.URL
+		t.ProjectID = m.ProjectID
+		t.Credentials = m.Credentials
+	}
+
 	// Resolve {var:...} templates in target fields
 	t.ProjectID = gitver.ResolveVars(t.ProjectID, vars)
 
