@@ -260,8 +260,10 @@ func RunSecurityScan(req SecurityScanRequest) error {
 		FailOnCritical: req.FailOnCritical || req.Config.Security.FailOnCritical,
 		ImageRef:       imageRef,
 		OutputDir:      req.OutputDir,
-		TrivyCacheMax:  req.Config.Security.Cache.Trivy.MaxSize,
-		GrypeCacheMax:  req.Config.Security.Cache.Grype.MaxSize,
+		TrivyCacheMax:    req.Config.Security.Cache.Trivy.MaxSize,
+		TrivyCacheMaxAge: req.Config.Security.Cache.Trivy.MaxAge,
+		GrypeCacheMax:    req.Config.Security.Cache.Grype.MaxSize,
+		GrypeCacheMaxAge: req.Config.Security.Cache.Grype.MaxAge,
 	}
 	if scanCfg.OutputDir == "" {
 		scanCfg.OutputDir = req.Config.Security.OutputDir
@@ -350,7 +352,11 @@ func RunSecurityScan(req SecurityScanRequest) error {
 	sec.Row("%-16s%s", "selection", target.SelectionReason)
 	sec.Row("%-16s%s", "stability", stabilityLabel(target.Stability))
 	if result.CacheMode != "" {
-		sec.Row("%-16s%s", "db-cache", result.CacheMode)
+		cacheDetail := result.CacheMode
+		if len(result.CacheCleared) > 0 {
+			cacheDetail += " (cleared: " + strings.Join(result.CacheCleared, ", ") + ")"
+		}
+		sec.Row("%-16s%s", "db-cache", cacheDetail)
 	}
 
 	if target.Digest != "" {

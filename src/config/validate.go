@@ -424,6 +424,8 @@ func Validate(cfg *Config) (warnings []string, err error) {
 		{"build_cache.cleanup.prune.images.unreferenced.older_than", cfg.BuildCache.Cleanup.Prune.Images.Unreferenced.OlderThan},
 		{"build_cache.cleanup.prune.build_cache.older_than", cfg.BuildCache.Cleanup.Prune.BuildCache.OlderThan},
 		{"build_cache.cleanup.prune.containers.exited.older_than", cfg.BuildCache.Cleanup.Prune.Containers.Exited.OlderThan},
+		{"security.cache.trivy.max_age", cfg.Security.Cache.Trivy.MaxAge},
+		{"security.cache.grype.max_age", cfg.Security.Cache.Grype.MaxAge},
 	} {
 		if dv.val != "" {
 			if _, err := ParseDuration(dv.val); err != nil {

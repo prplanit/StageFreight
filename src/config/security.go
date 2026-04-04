@@ -64,10 +64,12 @@ type SecurityCacheConfig struct {
 }
 
 // ScannerCacheConfig is the cache policy for a single scanner.
-// MaxSize set = persistent cache enabled + full-clear when over cap.
-// MaxSize empty = no StageFreight-managed persistence (tool defaults).
+// Any field set = persistent cache enabled for this tool.
+// All fields empty = no StageFreight-managed persistence (tool defaults).
+// Eviction is full-clear (opaque DBs, no granular eviction).
 type ScannerCacheConfig struct {
 	MaxSize string `yaml:"max_size,omitempty"` // e.g. "500MB" — full-clear when exceeded
+	MaxAge  string `yaml:"max_age,omitempty"`  // e.g. "7d" — full-clear when oldest file exceeds age
 }
 
 // DetailRule is a conditional override for security detail level in release notes.
