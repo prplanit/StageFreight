@@ -110,6 +110,7 @@ func executePhase(req Request) pipeline.Phase {
 			builderInfo := EnsureBuilder(pc.Config.BuildCache.Builder)
 			builderInfo = ResolveBuilderInfo(builderInfo)
 			RenderBuilderInfo(pc.Writer, pc.Color, builderInfo)
+			pc.Scratch["docker.builderInfo"] = builderInfo
 
 			// Render cache resolution info (resolve in cache.go, render here).
 			cacheInfo := ResolveCacheInfo(pc)

@@ -366,12 +366,17 @@ func runCrucibleMode(req Request) error {
 	if cruciblePassed {
 		repoID := resolveRepoIDFromContext(pc)
 
-		// Local retention — backend-aware.
-		// BuildKit manages its own internal cache via GC. Local export plane is separate.
-		if backend.IsBuildkit() && req.Config.BuildCache.Local.Retention.MaxAge == "" && req.Config.BuildCache.Local.Retention.MaxSize == "" {
-			retSec := output.NewSection(w, "Cache Retention (local)", 0, color)
-			retSec.Row("%-14s%s", "status", "managed by buildkitd (internal GC)")
-			retSec.Close()
+		// Cache prune — backend-aware.
+		// BuildKit cache lives inside the daemon, not on the local filesystem.
+		// Enforce retention via buildx prune (operational loop, not daemon GC).
+		// Local export cache (if it exists) is pruned separately.
+		// Prune failure post-publish is reported but does not undo a successful build.
+		if backend.IsBuildkit() {
+			pruneResult := pruneBuildkitCache(builderInfo.Name, req.Config.BuildCache.Local.Retention, req.Verbose)
+			renderBuildkitPrune(w, color, pruneResult, req.Verbose)
+			if pruneResult.Error != nil {
+				fmt.Fprintf(w, "    ⚠ cache prune failed — retention policy not enforced: %v\n", pruneResult.Error)
+			}
 		} else {
 			localRetResult := enforceLocalRetention(
 				LocalCacheDir(repoID, req.Config.BuildCache.Local),
