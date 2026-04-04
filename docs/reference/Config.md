@@ -156,6 +156,7 @@ Named build artifacts. Each build has a unique ID referenced by targets. Current
 | `id` | `id` | string | Yes | — | Unique identifier for this build, referenced by targets. |
 | `kind` | `kind` | string | Yes | — | Build type. Determines which fields are valid. |
 | `select_tags` | `select_tags` | []string | No | — | Tags for CLI filtering via `--select`. |
+| `required` | `required` | bool | No | — | bool value |
 | `build_mode` | `build_mode` | string | No | (standard) | Build execution strategy. |
 | `depends_on` | `depends_on` | string | No | — | string value |
 | `dockerfile` | `dockerfile` | string | No | auto-detected | Path to the Dockerfile. |
@@ -383,6 +384,7 @@ Security scanning configuration. Controls vulnerability scanning (Trivy, Grype),
 | Name | YAML Key | Type | Required | Default | Description |
 |------|----------|------|----------|---------|-------------|
 | `enabled` | `enabled` | bool | Yes | true | Run vulnerability scanning. |
+| `required` | `required` | bool | No | — | bool value |
 | `trivy` | `scanners.trivy` | bool | No | true | Run Trivy image scan. |
 | `grype` | `scanners.grype` | bool | No | true | Run Grype image scan. |
 | `sbom` | `sbom` | bool | Yes | true | Generate SBOM artifacts via Syft. |
@@ -509,6 +511,7 @@ commit:
 | Name | YAML Key | Type | Required | Default | Description |
 |------|----------|------|----------|---------|-------------|
 | `enabled` | `enabled` | bool | Yes | — | bool value |
+| `required` | `required` | bool | No | — | bool value |
 | `security_summary` | `security_summary` | string | Yes | — | string value |
 | `registry_links` | `registry_links` | bool | Yes | — | bool value |
 | `catalog_links` | `catalog_links` | bool | Yes | — | bool value |
@@ -579,6 +582,9 @@ commit:
 | Name | YAML Key | Type | Required | Default | Description |
 |------|----------|------|----------|---------|-------------|
 | `mode` | `mode` | string | No | — | string value |
+| `name` | `builder.name` | string | No | — | string value |
+| `driver` | `builder.driver` | string | No | — | string value |
+| `context` | `builder.context` | string | No | — | string value |
 | `path` | `local.path` | string | No | — | string value |
 | `max_age` | `local.retention.max_age` | string | No | — | string value |
 | `max_size` | `local.retention.max_size` | string | No | — | string value |
