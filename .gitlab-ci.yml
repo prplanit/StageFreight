@@ -56,7 +56,10 @@ dependency-update:
 build:
   stage: build
   variables:
-    <<: *buildkit-variables
+    BUILDKIT_HOST: "tcp://buildkitd:1234"
+    DOCKER_HOST: "tcp://dind:2376"
+    DOCKER_TLS_VERIFY: "1"
+    DOCKER_CERT_PATH: "/certs/client"
   before_script:
     - *sf-context
   script:

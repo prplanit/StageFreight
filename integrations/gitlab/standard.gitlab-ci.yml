@@ -53,6 +53,9 @@ dependency-update:
 
 build:
   stage: build
+  variables:
+    <<: *dind-variables
+    BUILDKIT_HOST: "tcp://buildkitd:1234"
   before_script:
     - *sf-context
   script:
