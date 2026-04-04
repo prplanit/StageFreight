@@ -1251,8 +1251,8 @@ func renderCISkip(section string, start time.Time, reason string) {
 }
 
 // governanceSourceConfigured checks if governance has a resolvable source.
-func governanceSourceConfigured(_ *config.Config) bool {
-	src, err := resolveGovernanceSource()
+func governanceSourceConfigured(appCfg *config.Config) bool {
+	src, err := resolveGovernanceSourceFromOpts(GovernanceReconcileOpts{Config: appCfg})
 	return err == nil && src.RepoURL != ""
 }
 
