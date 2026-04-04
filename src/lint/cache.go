@@ -32,7 +32,8 @@ type cacheEntry struct {
 // ResolveCacheDir determines the cache directory using the following precedence:
 //  1. STAGEFREIGHT_CACHE_DIR env var (used as-is, caller controls the path)
 //  2. configDir from .stagefreight.yml cache_dir (resolved relative to rootDir)
-//  3. os.UserCacheDir()/stagefreight/<project-hash>/lint (XDG-aware default)
+//  3. /stagefreight/cache/lint/<project-hash> (persistent runtime root, if mounted)
+//  4. os.UserCacheDir()/stagefreight/<project-hash>/lint (XDG-aware default)
 //
 // The project hash is a truncated SHA-256 of the absolute rootDir path,
 // keeping per-project caches isolated without long nested directory names.
@@ -50,21 +51,35 @@ func ResolveCacheDir(rootDir string, configDir string) string {
 		return filepath.Join(rootDir, configDir, "lint")
 	}
 
-	// 3. XDG-aware default via os.UserCacheDir
+	// Project hash: prefer repo identity (stable across runners/paths),
+	// fall back to absolute path (local dev).
+	identity := os.Getenv("SF_CI_REPO_URL")
+	if identity == "" {
+		absRoot, err := filepath.Abs(rootDir)
+		if err != nil {
+			absRoot = rootDir
+		}
+		identity = absRoot
+	}
+	h := sha256.Sum256([]byte(identity))
+	projectHash := hex.EncodeToString(h[:])[:12]
+
+	// 3. Persistent runtime root — capability-based: use if mounted AND writable.
+	if info, err := os.Stat("/stagefreight"); err == nil && info.IsDir() {
+		sfCache := filepath.Join("/stagefreight", "cache", "lint", projectHash)
+		if err := os.MkdirAll(sfCache, 0o755); err == nil {
+			return sfCache
+		}
+		// Mounted but not writable — fall through to XDG.
+	}
+
+	// 4. XDG-aware default via os.UserCacheDir
 	base, err := os.UserCacheDir()
 	if err != nil {
-		// Last resort: temp directory
 		base = os.TempDir()
 	}
 
-	absRoot, err := filepath.Abs(rootDir)
-	if err != nil {
-		absRoot = rootDir
-	}
-	h := sha256.Sum256([]byte(absRoot))
-	projectHash := hex.EncodeToString(h[:])[:12]
-
-	return filepath.Join(base, "stagefreight", projectHash, "lint")
+	return filepath.Join(base, "stagefreight", "cache", "lint", projectHash)
 }
 
 // Key computes a cache key from file content, module name, and config.
