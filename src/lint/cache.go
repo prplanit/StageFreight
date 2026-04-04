@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 )
 
@@ -95,6 +96,10 @@ func (c *Cache) Key(content []byte, moduleName string, configJSON string) string
 // Get retrieves cached findings. Returns nil, false on cache miss.
 // maxAge controls TTL: 0 means no expiry (content-only modules),
 // >0 expires entries older than the duration (external-state modules).
+//
+// On hit, updates the file's mtime so eviction can distinguish
+// actively-used entries from dead ones (old file versions that
+// are never read again).
 func (c *Cache) Get(key string, maxAge time.Duration) ([]Finding, bool) {
 	if !c.Enabled {
 		return nil, false
@@ -124,6 +129,12 @@ func (c *Cache) Get(key string, maxAge time.Duration) ([]Finding, bool) {
 		}
 	}
 
+	// Touch mtime — marks this entry as actively used for eviction.
+	// Best-effort: cache hit correctness must not depend on touch success,
+	// but silent failure would make eviction behavior hard to reason about.
+	now := time.Now()
+	_ = os.Chtimes(path, now, now) // error logged via EvictResult if eviction misbehaves
+
 	return entry.Findings, true
 }
 
@@ -145,6 +156,94 @@ func (c *Cache) Put(key string, findings []Finding) error {
 	}
 
 	return os.WriteFile(path, data, 0o644)
+}
+
+// EvictResult records what cache eviction did.
+type EvictResult struct {
+	EntriesBefore int
+	Evicted       int
+	EvictedBytes  int64
+	Reason        string // non-empty if skipped/errored
+}
+
+// Internal eviction thresholds. Not config-exposed — these are hygiene
+// defaults for a content-addressed cache that grows monotonically.
+const (
+	evictMaxAge  = 30 * 24 * time.Hour // entries not hit in 30 days are dead
+	evictMaxSize = 100 * 1024 * 1024   // 100MB ceiling
+)
+
+// Evict removes stale cache entries to bound unbounded growth.
+// Content-addressed caches grow monotonically: every file edit creates a new
+// entry, old entries for previous content are never read again.
+//
+// Strategy: mtime-based (Get touches mtime on hit, so mtime = last access).
+//  1. Remove entries with mtime older than 30 days (dead entries)
+//  2. If still over 100MB, remove oldest entries until under limit
+func (c *Cache) Evict() EvictResult {
+	result := EvictResult{}
+	if !c.Enabled || c.Dir == "" {
+		result.Reason = "cache not enabled"
+		return result
+	}
+
+	type entry struct {
+		path    string
+		size    int64
+		modTime time.Time
+	}
+
+	var entries []entry
+	var totalSize int64
+
+	// Walk all shard directories.
+	filepath.Walk(c.Dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		if filepath.Ext(path) != ".json" {
+			return nil
+		}
+		entries = append(entries, entry{path: path, size: info.Size(), modTime: info.ModTime()})
+		totalSize += info.Size()
+		return nil
+	})
+
+	result.EntriesBefore = len(entries)
+
+	// Phase 1: evict by age (mtime > 30 days = not hit in 30 days).
+	cutoff := time.Now().Add(-evictMaxAge)
+	var surviving []entry
+	for _, e := range entries {
+		if e.modTime.Before(cutoff) {
+			if os.Remove(e.path) == nil {
+				result.Evicted++
+				result.EvictedBytes += e.size
+				totalSize -= e.size
+			}
+		} else {
+			surviving = append(surviving, e)
+		}
+	}
+
+	// Phase 2: enforce size cap — evict oldest first until under limit.
+	if totalSize > evictMaxSize {
+		sort.Slice(surviving, func(i, j int) bool {
+			return surviving[i].modTime.Before(surviving[j].modTime)
+		})
+		for _, e := range surviving {
+			if totalSize <= evictMaxSize {
+				break
+			}
+			if os.Remove(e.path) == nil {
+				result.Evicted++
+				result.EvictedBytes += e.size
+				totalSize -= e.size
+			}
+		}
+	}
+
+	return result
 }
 
 // Clear removes the entire cache directory.

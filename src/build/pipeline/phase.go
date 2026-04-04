@@ -178,6 +178,18 @@ func runPreBuildLintImpl(ctx context.Context, rootDir string, appCfg *config.Con
 		fSec.Close()
 	}
 
+	// Evict stale lint cache entries after run.
+	// Touch-on-read (in Cache.Get) marks active entries, so eviction
+	// only removes dead entries (old file versions never read again).
+	evictResult := cache.Evict()
+	if evictResult.Evicted > 0 {
+		sec = output.NewSection(w, "Lint Cache Eviction", 0, color)
+		sec.Row("%-14s%d", "before", evictResult.EntriesBefore)
+		sec.Row("%-14s%d", "evicted", evictResult.Evicted)
+		sec.Row("%-14s%s", "reclaimed", formatEvictBytes(evictResult.EvictedBytes))
+		sec.Close()
+	}
+
 	if critical > 0 {
 		summary := fmt.Sprintf("%d files, %d cached, %d critical", len(files), totalCached, critical)
 		return summary, fmt.Errorf("lint failed: %d critical findings", critical)
@@ -193,6 +205,19 @@ func runPreBuildLintImpl(ctx context.Context, rootDir string, appCfg *config.Con
 	}
 
 	return summary, nil
+}
+
+func formatEvictBytes(b int64) string {
+	switch {
+	case b >= 1024*1024*1024:
+		return fmt.Sprintf("%.1f GB", float64(b)/(1024*1024*1024))
+	case b >= 1024*1024:
+		return fmt.Sprintf("%.1f MB", float64(b)/(1024*1024))
+	case b >= 1024:
+		return fmt.Sprintf("%.1f KB", float64(b)/1024)
+	default:
+		return fmt.Sprintf("%d B", b)
+	}
 }
 
 // DryRunGate checks pc.DryRun and, if true, calls renderPlan then returns ErrDryRunExit.
