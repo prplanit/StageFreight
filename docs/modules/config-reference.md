@@ -379,6 +379,10 @@ Security scanning configuration. Controls vulnerability scanning (Trivy, Grype),
 | `tag` | `release_detail_rules.tag` | string | No | — | Git tag pattern to match. Prefix with `!` to negate. |
 | `branch` | `release_detail_rules.branch` | string | No | — | Branch pattern to match. Prefix with `!` to negate. |
 | `detail` | `release_detail_rules.detail` | string | Yes | — | Detail level when this rule matches. |
+| `max_size` | `cache.trivy.max_size` | string | No | — | string value |
+| `max_age` | `cache.trivy.max_age` | string | No | — | string value |
+| `max_size` | `cache.grype.max_size` | string | No | — | string value |
+| `max_age` | `cache.grype.max_age` | string | No | — | string value |
 | `overwhelm_message` | `overwhelm_message` | []string | Yes | ["…maybe start here:"] | Message lines shown when >1000 vulnerabilities are found. |
 | `overwhelm_link` | `overwhelm_link` | string | Yes | — | URL appended after overwhelm message. Empty string disables. |
 
